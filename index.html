@@ -91,11 +91,29 @@ function meow(m, t, len, vol=0.3){
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+(v ? 0.01 : 0.03)); g.gain.setValueAtTime(vol, t+len-tail); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
   g.connect(voiceBus);
   if (v){
-    const s = ctx.createBufferSource(); s.buffer = v.buf; s.playbackRate.value = f / hz(v.midi);
-    if (len > v.dur / s.playbackRate.value) { s.loop = true; s.loopStart = v.offset + v.dur*0.3; s.loopEnd = v.offset + v.dur*0.6; } // stretch held notes over the vowel
-    const boost = ctx.createGain(); boost.gain.value = 2.5; s.connect(boost).connect(g);
-    s.start(t, v.offset); s.stop(t+len+0.05);
-    return { stop(at){ g.gain.cancelScheduledValues(at); g.gain.setTargetAtTime(0.0001, at, 0.03); try { s.stop(at+0.2); } catch {} } };
+    const rate = f / hz(v.midi), boost = ctx.createGain(); boost.gain.value = 2.5; boost.connect(g);
+    const srcs = [];
+    // play [from, from+span) of the take (buffer seconds) at time `at`, with linear fade-in/out of `fade` s
+    const piece = (at, from, span, fadeIn, fadeOut) => {
+      const s = ctx.createBufferSource(), e = ctx.createGain(), real = span / rate;
+      s.buffer = v.buf; s.playbackRate.value = rate; s.connect(e).connect(boost);
+      e.gain.setValueAtTime(fadeIn ? 0 : 1, at); if (fadeIn) e.gain.linearRampToValueAtTime(1, at + fadeIn);
+      e.gain.setValueAtTime(1, at + real - fadeOut); e.gain.linearRampToValueAtTime(0, at + real);
+      s.start(at, from, span); srcs.push(s); return real;
+    };
+    const A = 0.45, T = 0.4; // share of the take used as the "mee" attack and the "ow" ending
+    const attackReal = v.dur*A / rate, tailReal = v.dur*T / rate;
+    if (len <= v.dur / rate + 0.05) piece(t, v.offset, Math.min(v.dur, len*rate), 0, 0.03);
+    else {
+      // held note: "mee" attack, then overlapping crossfaded grains from the steady vowel ("eeee"), then the real "ow"
+      const X = 0.05, grain = 0.12, hop = grain/2; // seconds of real time
+      piece(t, v.offset, v.dur*A, 0, X);
+      const vowelFrom = v.offset + v.dur*0.35, vowelSpan = v.dur*0.2, tailAt = t + len - tailReal;
+      for (let at = t + attackReal - X; at < tailAt; at += hop)
+        piece(at, vowelFrom + Math.random()*Math.max(0, vowelSpan - grain*rate), grain*rate, grain/2, grain/2);
+      piece(tailAt - X, v.offset + v.dur*(1-T), v.dur*T, X, 0.03);
+    }
+    return { stop(at){ g.gain.cancelScheduledValues(at); g.gain.setTargetAtTime(0.0001, at, 0.03); srcs.forEach(s => { try { s.stop(at+0.2); } catch {} }); } };
   } else {
     const filt = ctx.createBiquadFilter(), lfo = ctx.createOscillator(), lg = ctx.createGain();
     lfo.frequency.value = 6; lg.gain.value = f*0.015; lfo.connect(lg); srcs.push(lfo);
@@ -393,17 +411,19 @@ function drawHud(){ hud.redraw((g, W, H) => {
   g.font = '36px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText(`x${mult()}`, W-30, 140);
   const p = Math.min(1, Math.max(0, (songNow()-S.t0) / S.secs));
   box(g, 30, 200, W-60, 18, 9, '#3a2a50'); if (p > 0.02) box(g, 30, 200, (W-60)*p, 18, 9, '#ff5fa2');
+  if (renderer.xr.isPresenting) { g.textAlign = 'left'; g.font = '24px system-ui'; g.fillStyle = '#cbb8ff';
+    g.fillText(`baton flick ${batonPeak.toFixed(1)} m/s (counts above ${FLICK_VY})`, 30, 246); batonPeak *= 0.5; }
 }); }
 function drawResults(){
   const { acc, stars } = S;
   menu.redraw((g, W, H) => {
     box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.9)'); g.textAlign = 'center';
-    g.fillStyle = '#ffc94d'; g.font = 'bold 84px system-ui'; g.fillText(['Hiss... try again','Nice meowing!','Great show!','PURRFECT!'][stars], W/2, 120);
+    g.fillStyle = '#ffc94d'; g.font = 'bold 84px system-ui'; g.fillText(['Hiss... try again','Nice meowing!','Great show!','PURRFECT SHOW!'][stars], W/2, 120);
     g.font = '90px system-ui'; g.fillText('★'.repeat(stars) + '☆'.repeat(3-stars), W/2, 240);
     g.fillStyle = '#fff'; g.font = 'bold 56px system-ui'; g.fillText(S.score.toLocaleString() + ' pts', W/2, 340);
     g.font = '38px system-ui'; g.fillStyle = '#cbb8ff';
     g.fillText(`${Math.round(acc*100)}% accuracy · max combo ${S.maxCombo}`, W/2, 410);
-    g.fillText(`${S.perfect} perfect · ${S.good} good · ${S.miss} miss`, W/2, 465);
+    g.fillText(`${S.perfect} purrfect · ${S.good} good · ${S.miss} miss`, W/2, 465);
     g.fillStyle = '#8cff66'; g.font = 'bold 44px system-ui';
     if (S.newVenue) g.fillText(`New venue unlocked: ${TIERS[Math.floor(S.idx/4)+1].venue}!`, W/2, 570);
     else if (S.newBest) g.fillText('New best score!', W/2, 570);
@@ -505,7 +525,7 @@ function press(lane, ctrl, canHold = true){
   if (hold) { hit.holding = true; hit.tail.material.opacity = 0.95; S.holds[lane] = { n:hit, voice, ctrl }; }
   band[lane].userData.singT = perfNow(); bursts[lane].userData.t = perfNow();
   for (let k=0; k<10; k++) spark(pads[lane].position, LANES[lane]);
-  showJudge(perfect ? 'PERFECT!' : 'GOOD', perfect ? '#ffc94d' : '#8cff66');
+  showJudge(perfect ? 'PURRFECT!' : 'GOOD', perfect ? '#ffc94d' : '#8cff66');
   ctrl?.userData.src?.gamepad?.hapticActuators?.[0]?.pulse?.(perfect ? 0.8 : 0.4, 40);
   drawHud();
 }
@@ -579,7 +599,8 @@ const ctrls = [0, 1].map(i => {
 
 // ---------- loop ----------
 const M = new THREE.Matrix4(), base = new THREE.Matrix4(), V = new THREE.Vector3(), RZ = new THREE.Matrix4(), TIP = new THREE.Vector3();
-const FLICK_VY = 1.1;      // m/s upward baton speed that counts as a conducting stroke
+const FLICK_VY = 0.6;      // m/s upward baton speed that counts as a conducting stroke
+let batonPeak = 0;         // fastest recent upward stroke, shown on the HUD for tuning
 const PAUSE_BUTTONS = [4, 5, 6, 7, 8, 9, 10, 11, 12]; // A/B/X/Y and any extra (e.g. menu) buttons the browser exposes
 let lastTime = perfNow();
 function maestro(c, time, dt){
@@ -588,11 +609,17 @@ function maestro(c, time, dt){
   if (down && !u.btnDown) state === 'play' ? pause(!paused) : null;
   u.btnDown = down;
   u.tip.getWorldPosition(TIP);
-  u.vy = 0.6*u.vy + 0.4*(TIP.y - u.prevTip.y)/Math.max(dt, 1e-3); u.prevTip.copy(TIP);
+  u.vy = 0.3*u.vy + 0.7*(TIP.y - u.prevTip.y)/Math.max(dt, 1e-3); u.prevTip.copy(TIP);
+  u.tip.scale.setScalar(0.015 + 0.03*Math.max(0, 1 - (time - u.flickT)/0.25)); // tip flashes on every stroke
   if (state !== 'play' || paused) return;
+  if (u.vy > batonPeak) batonPeak = u.vy;
   const l = aimedLane(c); if (l >= 0) { u.lastLane = l; u.lastLaneT = time; }
-  // point at a lane, then raise the baton sharply = conduct that note
-  if (u.vy > FLICK_VY && time - u.flickT > 0.18 && time - u.lastLaneT < 0.4) { u.flickT = time; press(u.lastLane, c, !!u.triggerDown); }
+  // point at a lane, then raise the baton = conduct that note
+  if (u.vy > FLICK_VY && time - u.flickT > 0.18){
+    u.flickT = time;
+    gp.hapticActuators?.[0]?.pulse?.(0.25, 20);
+    if (time - u.lastLaneT < 0.5) press(u.lastLane, c, !!u.triggerDown);
+  }
 }
 function tick(){
   const time = perfNow(), dt = Math.min(0.1, time - lastTime); lastTime = time;
