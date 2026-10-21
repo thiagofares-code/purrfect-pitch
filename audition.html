@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cat Auditions</title>
+<style>
+  :root { --bg:#0e0a1a; --card:#1c1430; --text:#f3eefc; --muted:#b9a9dd; --pink:#ff5fa2; --yellow:#ffc94d; --purple:#b48cff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui, sans-serif; padding:24px 16px 48px; }
+  main { max-width:880px; margin:0 auto; }
+  h1 { font-size:28px; margin:0 0 4px; }
+  p.lead { color:var(--muted); margin:0 0 24px; }
+  section { margin:28px 0; }
+  h2 { font-size:20px; margin:0 0 4px; display:flex; align-items:center; gap:10px; }
+  h2 .dot { width:14px; height:14px; border-radius:50%; display:inline-block; }
+  .hint { color:var(--muted); margin:0 0 12px; font-size:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:12px; }
+  .card { background:var(--card); border-radius:14px; padding:14px; border:2px solid transparent; }
+  .card.now { border-color:#ffffff33; }
+  .num { font-weight:700; font-size:22px; }
+  .label { color:var(--muted); font-size:14px; margin-bottom:10px; min-height:21px; }
+  button { width:100%; margin-top:6px; padding:10px; border:0; border-radius:10px; font:600 15px system-ui; cursor:pointer; color:#1a0f24; }
+  button.raw { background:#3a2f55; color:var(--text); font-weight:500; }
+  button:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🐱 Cat Auditions</h1>
+  <p class="lead">Each cat sings three notes, then a little phrase, tuned the way it would be in the game. <b>Original</b> is the untouched recording. Pick a favourite number for each spot.</p>
+  <div id="spots"></div>
+</main>
+<script>
+const SPOTS = [
+  { key:'low',  title:'Cat 1, the low voice (pink lane)', color:'var(--pink)',   hint:'Should sound like a real cat, not robotic.' },
+  { key:'mid',  title:'Cat 2 (yellow lane)',             color:'var(--yellow)', hint:'Cat-like and cute.' },
+  { key:'solo', title:'The balcony soloist (purple lane, from venue 3)', color:'var(--purple)', hint:'A nice tone that carries over the band.' },
+];
+const player = new Audio();
+const play = src => { player.pause(); player.src = src; player.currentTime = 0; player.play(); };
+fetch('sounds/audition/audition.json').then(r => r.json()).then(m => {
+  const root = document.getElementById('spots');
+  for (const s of SPOTS) {
+    const sec = document.createElement('section');
+    sec.innerHTML = `<h2><span class="dot" style="background:${s.color}"></span>${s.title}</h2><p class="hint">${s.hint}</p><div class="grid"></div>`;
+    m[s.key].forEach((c, i) => {
+      const card = document.createElement('div'); card.className = 'card' + (i === 0 ? ' now' : '');
+      card.innerHTML = `<div class="num">${i + 1}</div><div class="label">${c.label}</div>
+        <button style="background:${s.color}">▶ Tuned</button><button class="raw">Original</button>`;
+      const [tuned, raw] = card.querySelectorAll('button');
+      tuned.onclick = () => play(`sounds/audition/${c.id}.mp3`); raw.onclick = () => play(`sounds/audition/${c.id}-raw.mp3`);
+      sec.querySelector('.grid').appendChild(card);
+    });
+    root.appendChild(sec);
+  }
+});
+</script>
+</body>
+</html>
