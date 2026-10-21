@@ -7,6 +7,7 @@ from parselmouth.praat import call
 
 KEEP = 0.15       # share of the cat's own pitch movement kept, so it still sounds alive
 TARGET_RMS = 0.1  # every voice at the same loudness
+SHORT = 0.32      # seconds: length of the quick "mew" used for short notes
 VOICES = [  # name, source wav, meow start/len (s, from the grader), natural pitch (MIDI), notes to render
     ('tom',     'soundreality-cat-meow-fx-461188.wav',          0.04, 1.08, 65.7, range(62, 75)),
     ('ribs',    'ribhavagrawal-cat-meowing-type-01-293291.wav', 0.10, 0.86, 72.7, range(65, 82)),
@@ -29,23 +30,27 @@ for name, wav, start, dur, natural, notes in VOICES:
     pts = [(call(tier, 'Get time from index', i), call(tier, 'Get value at index', i)) for i in range(1, call(tier, 'Get number of points') + 1)]
     semis = np.array([st(f) for _, f in pts]); med = float(np.median(semis))
     glide = float(np.percentile(semis, 90) - np.percentile(semis, 10))
-    for m in notes:
+    # every note twice: the full meow, and a short "mew" (the whole meow squeezed to SHORT s, same pitch) for quick notes
+    for m, suffix in [(m, s) for m in notes for s in ('', '_s')]:
         new = call('Create PitchTier', 'target', 0, seg.duration)
         keep = KEEP * min(1, 2.0 / max(glide, 1e-6))  # big swoopers (Tom) keep at most ~2 st x KEEP of movement
         for t, f in pts: call(new, 'Add point', t, hz(m + keep * (st(f) - med)))
         call([new, manip], 'Replace pitch tier')
+        dt = call('Create DurationTier', 'speed', 0, seg.duration)
+        call(dt, 'Add point', 0, SHORT / seg.duration if suffix else 1.0)
+        call([dt, manip], 'Replace duration tier')
         out = call(manip, 'Get resynthesis (overlap-add)')
         y = out.values[0]; peak = np.max(np.abs(y))
         if peak > 0.95: out.values[0] = y * (0.95 / peak)
         # fade the edges so samples start and stop without clicks
         n = len(out.values[0]); f = int(0.008 * out.sampling_frequency)
         ramp = np.linspace(0, 1, f); out.values[0][:f] *= ramp; out.values[0][n - f:] *= ramp[::-1]
-        path = out_dir / f'{name}_{m}.wav'; out.save(str(path), 'WAV')
+        path = out_dir / f'{name}_{m}{suffix}.wav'; out.save(str(path), 'WAV')
         # verify: pitch of the steady middle of the result vs the target note
         p = out.to_pitch_ac(time_step=0.01, pitch_floor=150, pitch_ceiling=2000).selected_array['frequency']; p = p[p > 0]
         mid = p[int(len(p) * 0.2): max(int(len(p) * 0.8), int(len(p) * 0.2) + 1)]
         cents = 1200 * np.log2(mid / hz(m))
-        report.append(dict(voice=name, midi=m, dur=round(out.duration, 3), shift=round(m - natural, 1),
+        report.append(dict(voice=name + suffix, midi=m, dur=round(out.duration, 3), shift=round(m - natural, 1),
                            err_cents=round(float(np.median(cents)), 1), spread_cents=round(float(np.std(cents)), 1)))
 report_path.write_text(json.dumps(report, indent=1))
 errs = np.array([abs(r['err_cents']) for r in report]); spreads = np.array([r['spread_cents'] for r in report])

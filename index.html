@@ -20,10 +20,11 @@ Quest: Enter VR · aim the baton at a lane and flick it up (or pull the trigger)
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor } from './songs.js?v=11';
+import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor, chordAt } from './songs.js?v=13';
 import { buildVenues } from './venues.js?v=11';
 import { makePaw } from './paw.js?v=12';
-const BUILD = 'v12'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+import { makeBand } from './band.js?v=13';
+const BUILD = 'v13'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -63,14 +64,14 @@ function initAudio(){
   voiceBus.connect(shelf).connect(master); shelf.connect(verb).connect(wet).connect(master);
   noise = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
   const d = noise.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
-  drumPan = panner(new THREE.Vector3(0, 0.8, 2.6)); drumPan.connect(master); // drums come from the drummer behind you
+  backing = makeBand(ctx, master, noise, (x, y, z) => panner(new THREE.Vector3(x, y, z))); // each instrument plays from its spot on stage
   // crowd murmur: four quiet loops placed around the audience, louder for bigger crowds and when they're excited
   murmur = [0, 1, 2, 3].map(() => { const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), p = panner(new THREE.Vector3());
     s.buffer = noise; s.loop = true; s.loopStart = Math.random(); f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 0.8; g.gain.value = 0;
     s.connect(f).connect(g).connect(p).connect(master); s.start(); return { g, p }; });
   placeMurmur(); loadVoices();
 }
-let drumPan, murmur = [];
+let backing, murmur = []; // backing = the venue's instrumental band (band.js)
 // a 3D sound source: HRTF panning plus distance, heard from wherever the headset is
 function panner(at, ref = 2){
   const p = ctx.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = ref; p.rolloffFactor = 1;
@@ -99,11 +100,13 @@ const VOICE_DEFS = [ // slot order = lane colours: pink, yellow, purple soloist,
   { name:'mitten',  natural:74.5, lo:67, hi:83 },
   { name:'kitty',   natural:78.5, lo:70, hi:91 },
 ];
-const SAMPLES = {}; // 'tom_65' -> { midi, offset, dur, buf, loop }
+const SAMPLES = {}; // 'tom_65' -> { key, midi, offset, dur, buf, loop }; 'tom_65_s' is the same note as a quick 0.32 s "mew"
+const SHORT_NOTE = 0.55; // seconds: notes this short sing the whole quick mew instead of the start of a long meow
 function loadVoices(){
-  for (const v of VOICE_DEFS) for (let m = v.lo; m <= v.hi; m++)
-    fetch(`sounds/tuned/${v.name}_${m}.mp3`).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => {
-      const s = { midi:m, offset:0, dur:buf.duration }; s.loop = makeLoop(s, buf); s.buf = buf; SAMPLES[`${v.name}_${m}`] = s; }).catch(() => {});
+  for (const v of VOICE_DEFS) for (let m = v.lo; m <= v.hi; m++) for (const sfx of ['', '_s']) {
+    const key = `${v.name}_${m}`;
+    fetch(`sounds/tuned/${key}${sfx}.mp3`).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => {
+      const s = { key, midi:m, offset:0, dur:buf.duration }; if (!sfx) s.loop = makeLoop(s, buf); s.buf = buf; SAMPLES[key + sfx] = s; }).catch(() => {}); }
 }
 // sustain loop for held notes: a whole number of pitch cycles from the middle of the vowel, with its end
 // trimmed to match its start and crossfaded into the samples just before it, so repeating it has no seam
@@ -121,7 +124,7 @@ function pickVoice(m, slot = -1){
   const order = VOICE_DEFS.map((v, g) => ({ v, g })).sort((a, b) => (b.g === slot) - (a.g === slot) || Math.abs(m - a.v.natural) - Math.abs(m - b.v.natural));
   for (const { v } of order) if (m >= v.lo && m <= v.hi && SAMPLES[`${v.name}_${m}`]) return SAMPLES[`${v.name}_${m}`];
   let best = null, d = Infinity; // outside every range: nearest rendered note, pitch-shifted
-  for (const s of Object.values(SAMPLES)) if (Math.abs(s.midi - m) < d) { d = Math.abs(s.midi - m); best = s; }
+  for (const [k, s] of Object.entries(SAMPLES)) if (!k.endsWith('_s') && Math.abs(s.midi - m) < d) { d = Math.abs(s.midi - m); best = s; }
   return best;
 }
 // octave that keeps a melody closest to the cats' natural range (synth uses it too, so both sound alike)
@@ -147,8 +150,9 @@ function meow(m, t, len, vol=0.3, slot=-1, at=null){
       s.start(at, from, span); srcs.push(s); return real;
     };
     const A = 0.45, T = 0.4; // share of the take used as the "mee" attack and the "ow" ending
-    const attackReal = v.dur*A / rate, tailReal = v.dur*T / rate;
-    if (len <= v.dur / rate + 0.05) piece(t, v.offset, Math.min(v.dur, len*rate), 0, 0.03);
+    const attackReal = v.dur*A / rate, tailReal = v.dur*T / rate, mew = len <= SHORT_NOTE && SAMPLES[v.key + '_s'];
+    if (mew) { const s = ctx.createBufferSource(); s.buffer = mew.buf; s.playbackRate.value = rate; s.connect(boost); s.start(t); srcs.push(s); } // the whole "m-ee-ow", quick
+    else if (len <= v.dur / rate + 0.05) piece(t, v.offset, Math.min(v.dur, len*rate), 0, 0.03);
     else {
       // held note: "mee" attack, then a seamless pitch-cycle loop of the vowel ("eeee") with vibrato, then the real "ow"
       const X = 0.05, loopAt = t + attackReal - X, tailAt = t + len - tailReal;
@@ -180,24 +184,6 @@ function meow(m, t, len, vol=0.3, slot=-1, at=null){
   }
   srcs.forEach(s => { s.start(t); s.stop(t+len+0.05); });
   return { stop(at){ g.gain.cancelScheduledValues(at); g.gain.setTargetAtTime(0.0001, at, 0.03); srcs.forEach(s => { try { s.stop(at+0.2); } catch {} }); } };
-}
-function kick(t){
-  const o = ctx.createOscillator(), g = ctx.createGain();
-  o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(40, t+0.14);
-  g.gain.setValueAtTime(0.7, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.18);
-  o.connect(g).connect(drumPan); o.start(t); o.stop(t+0.2);
-}
-function hat(t){
-  const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-  s.buffer = noise; f.type = 'highpass'; f.frequency.value = 7000;
-  g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.05);
-  s.connect(f).connect(g).connect(drumPan); s.start(t); s.stop(t+0.06);
-}
-function bass(t, m, len){
-  const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-  o.type = 'triangle'; o.frequency.value = hz(m); f.type = 'lowpass'; f.frequency.value = 600;
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
-  o.connect(f).connect(g).connect(master); o.start(t); o.stop(t+len+0.05);
 }
 function applause(){ // clapping from six spots in the crowd, plus a few cats meowing along, so it surrounds you
   const t = ctx.currentTime, loud = 0.35*Math.sqrt(audCount/100);
@@ -590,7 +576,7 @@ function startSong(i){
     const tail = hold ? new THREE.Mesh(tailGeo, basic(LANES[n.lane], { transparent:true, opacity:0.55 })) : null;
     if (tail) { tail.visible = false; noteGroup.add(tail); }
     return { ...n, time, end: time + n.secs*0.85, hold, tail, mesh, judged:false }; });
-  S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, segIdx:1, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:Array(5).fill(null) };
+  S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, chords:p.chords, segIdx:1, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:Array(5).fill(null) };
   state = 'play'; menu.mesh.visible = false; hud.mesh.visible = true; drawHud(); needCalib = 3;
 }
 function clearNotes(){
@@ -614,16 +600,15 @@ function endSong(){
   state = 'results'; clearNotes(); applause(); cheerUntil = perfNow() + 4; drawResults(); menu.mesh.visible = true;
   celebrate(true); setTimeout(() => celebrate(true), 1600); // the finale
 }
-function melodyAt(beat){ let m = S.notes[0].midi; for (const n of S.notes) { if (n.beat > beat) break; m = n.midi; } return m; }
+// the venue's band plays the song's chord chart, one pulse at a time, scheduled ~0.2 s ahead on the audio clock
 function scheduleBacking(){
-  const { song } = S;
+  const { song } = S, P = Math.max(1, Math.round(song.bar / song.hat));
   while (S.nextHat <= S.length){
     const b = S.nextHat, t = S.t0 + timeAt(S.segs, b);
     if (t > ctx.currentTime + 0.2) break;
-    const inBar = Math.round(((b - song.pickup) % song.bar + song.bar) % song.bar);
-    if (b >= song.pickup && inBar === 0) { kick(t); bass(t, 36 + melodyAt(b) % 12, song.bar*spbAt(S.segs, b)*0.9); }
-    else if (song.bar === 4 && inBar === 2) kick(t);
-    else hat(t);
+    const inBar = ((b - song.pickup) % song.bar + song.bar) % song.bar, spb = spbAt(S.segs, b);
+    backing.play(venue, { t, beat: b, len: song.hat*spb, bar: song.bar*spb, P, p: Math.round(inBar / song.hat) % P,
+      chord: chordAt(S.chords, b), nextChord: chordAt(S.chords, b - inBar + song.bar), section: S.segs.some(s => Math.abs(s.b - b) < 1e-6) });
     S.nextHat += song.hat;
   }
 }
