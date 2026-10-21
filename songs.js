@@ -4,11 +4,12 @@
 // Optional: `tempo` speeds up single parts, `accel` speeds up every repeat of the form.
 
 export const TIERS = [
-  { venue:'The Alley',       rank:'Kitten',    crowd:40,  bg:0x0d1220, curtain:0x666677, beams:0, drummer:false },
-  { venue:'The Rooftop',     rank:'House Cat', crowd:110, bg:0x160d2a, curtain:0x9977bb, beams:2, drummer:true },
-  { venue:'The Jazz Club',   rank:'Street Cat',crowd:200, bg:0x1c100a, curtain:0xcc8855, beams:2, drummer:true },
-  { venue:'The Opera House', rank:'Show Cat',  crowd:340, bg:0x1a0508, curtain:0xffffff, beams:4, drummer:true },
-  { venue:'The Stadium',     rank:'Superstar', crowd:565, bg:0x050814, curtain:0x5566bb, beams:4, drummer:true },
+  // scenery, crowd size and effects live in venues.js
+  { venue:'The Alley',       rank:'Kitten',    bg:0x0d1220, curtain:0x666677, beams:0, drummer:false },
+  { venue:'The Rooftop',     rank:'House Cat', bg:0x160d2a, curtain:0x9977bb, beams:2, drummer:true },
+  { venue:'The Jazz Club',   rank:'Street Cat',bg:0x1c100a, curtain:0xcc8855, beams:0, drummer:true }, // low ceiling: no beams
+  { venue:'The Opera House', rank:'Show Cat',  bg:0x1a0508, curtain:0xffffff, beams:4, drummer:true },
+  { venue:'The Stadium',     rank:'Superstar', bg:0x050814, curtain:0x5566bb, beams:4, drummer:true },
 ];
 export const STARS_TO_UNLOCK = 8; // of the 12 available in the previous venue
 export const TARGET_SECS = 110;   // the form repeats until the song reaches this length

@@ -20,8 +20,9 @@ Quest: Enter VR · aim the baton at a lane and flick it up (or pull the trigger)
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor } from './songs.js?v=10';
-const BUILD = 'v10'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor } from './songs.js?v=11';
+import { buildVenues } from './venues.js?v=11';
+const BUILD = 'v11'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -61,7 +62,31 @@ function initAudio(){
   voiceBus.connect(shelf).connect(master); shelf.connect(verb).connect(wet).connect(master);
   noise = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
   const d = noise.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
-  loadVoices();
+  drumPan = panner(new THREE.Vector3(0, 0.8, 2.6)); drumPan.connect(master); // drums come from the drummer behind you
+  // crowd murmur: four quiet loops placed around the audience, louder for bigger crowds and when they're excited
+  murmur = [0, 1, 2, 3].map(() => { const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), p = panner(new THREE.Vector3());
+    s.buffer = noise; s.loop = true; s.loopStart = Math.random(); f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 0.8; g.gain.value = 0;
+    s.connect(f).connect(g).connect(p).connect(master); s.start(); return { g, p }; });
+  placeMurmur(); loadVoices();
+}
+let drumPan, murmur = [];
+// a 3D sound source: HRTF panning plus distance, heard from wherever the headset is
+function panner(at, ref = 2){
+  const p = ctx.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = ref; p.rolloffFactor = 1;
+  p.positionX.value = at.x; p.positionY.value = at.y; p.positionZ.value = at.z; return p;
+}
+const crowdSpot = () => { const a = AUD[Math.random()*audCount|0]; return new THREE.Vector3(a.x, a.y + 0.8, a.z); };
+function placeMurmur(){ // one murmur source per quarter of the current crowd
+  if (!ctx) return;
+  murmur.forEach((m, q) => { const pts = AUD.slice(0, audCount).filter((_, i) => i % 4 === q), c = pts.reduce((s, a) => s.add(TIP.set(a.x, a.y, a.z)), new THREE.Vector3()).divideScalar(Math.max(1, pts.length));
+    m.p.positionX.value = c.x; m.p.positionY.value = c.y + 0.8; m.p.positionZ.value = c.z; m.base = 0.05*Math.sqrt(audCount/100); });
+}
+function boom(at){ // firework: a low thump and a crackle, from where it burst
+  const t = ctx.currentTime, p = panner(at, 12); p.connect(master);
+  for (const [type, f, gain, dur, delay] of [['lowpass', 140, 0.9, 0.9, 0], ['highpass', 3000, 0.25, 0.7, 0.25]]) {
+    const s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = noise; fl.type = type; fl.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t + delay); g.gain.exponentialRampToValueAtTime(gain, t + delay + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + delay + dur);
+    s.connect(fl).connect(g).connect(p); s.start(t + delay, Math.random()); s.stop(t + delay + dur + 0.05); }
 }
 // the choir: five cats, one per lane slot, each pre-tuned onto every note in its range (tools/tune.py:
 // Praat PSOLA, all within 8 cents of the note). A note plays from its lane's own cat when that cat covers
@@ -103,10 +128,12 @@ function bestShift(notes){
   const roots = VOICE_DEFS.map(v => v.natural), cost = k => notes.reduce((s, n) => s + Math.min(...roots.map(r => Math.abs(n.midi + k - r))), 0);
   return [-12, 0, 12].reduce((a, k) => cost(k) < cost(a) ? k : a, 0);
 }
-function meow(m, t, len, vol=0.3, slot=-1){
-  const f = hz(m), g = ctx.createGain(), srcs = [], tail = Math.min(0.25, len*0.4), v = pickVoice(m, slot);
+// slot = which choir cat sings (its sound comes from that cat); at = any other spot (e.g. a cat in the crowd)
+function meow(m, t, len, vol=0.3, slot=-1, at=null){
+  const f = hz(m), g = ctx.createGain(), srcs = [], tail = Math.min(0.35, len*0.45), v = pickVoice(m, slot); // soft release
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+(v ? 0.01 : 0.03)); g.gain.setValueAtTime(vol, t+len-tail); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
-  g.connect(voiceBus);
+  const from = slot >= 0 ? allBand[slot].getWorldPosition(new THREE.Vector3()).setY(allBand[slot].position.y + 1) : at;
+  if (from) g.connect(panner(from)).connect(voiceBus); else g.connect(voiceBus);
   if (v){
     const rate = f / hz(v.midi), boost = ctx.createGain(); boost.gain.value = 2.5; boost.connect(g);
     const srcs = [];
@@ -127,7 +154,8 @@ function meow(m, t, len, vol=0.3, slot=-1){
       piece(t, v.offset, v.dur*A, 0, X);
       const s = ctx.createBufferSource(), e = ctx.createGain(), vib = ctx.createOscillator(), vg = ctx.createGain();
       s.buffer = v.loop; s.loop = true; s.playbackRate.value = rate;
-      vib.frequency.value = 5.5; vg.gain.value = 12; vib.connect(vg).connect(s.detune); // ±12 cents
+      vib.frequency.value = 5.5; vib.connect(vg).connect(s.detune); // vibrato grows in like a singer's, up to ±15 cents
+      vg.gain.setValueAtTime(0, loopAt); vg.gain.linearRampToValueAtTime(15, loopAt + 0.6);
       e.gain.setValueAtTime(0, loopAt); e.gain.linearRampToValueAtTime(1, loopAt + X);
       e.gain.setValueAtTime(1, tailAt); e.gain.linearRampToValueAtTime(0, tailAt + X);
       s.connect(e).connect(boost);
@@ -156,13 +184,13 @@ function kick(t){
   const o = ctx.createOscillator(), g = ctx.createGain();
   o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(40, t+0.14);
   g.gain.setValueAtTime(0.7, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.18);
-  o.connect(g).connect(master); o.start(t); o.stop(t+0.2);
+  o.connect(g).connect(drumPan); o.start(t); o.stop(t+0.2);
 }
 function hat(t){
   const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
   s.buffer = noise; f.type = 'highpass'; f.frequency.value = 7000;
   g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.05);
-  s.connect(f).connect(g).connect(master); s.start(t); s.stop(t+0.06);
+  s.connect(f).connect(g).connect(drumPan); s.start(t); s.stop(t+0.06);
 }
 function bass(t, m, len){
   const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
@@ -170,12 +198,13 @@ function bass(t, m, len){
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
   o.connect(f).connect(g).connect(master); o.start(t); o.stop(t+len+0.05);
 }
-function applause(){
-  const t = ctx.currentTime, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-  s.buffer = noise; f.type = 'bandpass'; f.frequency.value = 1800; f.Q.value = 0.6;
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t+0.3); g.gain.exponentialRampToValueAtTime(0.0001, t+2.4);
-  s.connect(f).connect(g).connect(master); s.start(t); s.stop(t+2.5);
-  for (let i=0;i<6;i++) meow(70 + (Math.random()*12|0), t+0.2+Math.random()*1.5, 0.35, 0.08);
+function applause(){ // clapping from six spots in the crowd, plus a few cats meowing along, so it surrounds you
+  const t = ctx.currentTime, loud = 0.35*Math.sqrt(audCount/100);
+  for (let k=0; k<6; k++){ const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), d = rnd(2.2, 3.2);
+    s.buffer = noise; f.type = 'bandpass'; f.frequency.value = rnd(1400, 2400); f.Q.value = 0.6;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(loud, t+0.3); g.gain.exponentialRampToValueAtTime(0.0001, t+d);
+    s.connect(f).connect(g).connect(panner(crowdSpot(), 4)).connect(master); s.start(t, Math.random()); s.stop(t+d+0.05); }
+  for (let i=0;i<8;i++) meow(70 + (Math.random()*12|0), t+0.2+Math.random()*1.8, 0.35, 0.1, -1, crowdSpot());
 }
 
 // ---------- renderer / scene ----------
@@ -219,9 +248,9 @@ const SPH = new THREE.SphereGeometry(1, 20, 14);
 const add = (geo, mat, x=0, y=0, z=0, parent=scene) => { const m = new THREE.Mesh(geo, mat); m.position.set(x,y,z); parent.add(m); return m; };
 
 // stage + venue
-add(new THREE.BoxGeometry(14, 1.5, 10), lamb(0x5a3a22), 0, -0.75, 0);
+const stageMat = lamb(0x5a3a22); // glows in the lane colour while you hold a note
+add(new THREE.BoxGeometry(14, 1.5, 10), stageMat, 0, -0.75, 0);
 add(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 32), lamb(0x2a1a3a), 0, 0.03, 0);
-add(new THREE.PlaneGeometry(80, 60).rotateX(-Math.PI/2), lamb(0x14101c), 0, -1.5, -30);
 { const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.05, 8, 6), basic(0xffd27a), 29), m = new THREE.Matrix4();
   for (let i=0;i<29;i++) bulbs.setMatrixAt(i, m.makeTranslation(-7+i*0.5, 0.03, -5)); scene.add(bulbs); }
 function canvasTex(w, h, draw){ const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
@@ -229,11 +258,11 @@ function canvasTex(w, h, draw){ const c = document.createElement('canvas'); c.wi
 const curtain = canvasTex(512, 64, (g, w) => { for (let x=0;x<w;x++){ g.fillStyle = `hsl(350,70%,${18+14*(0.5+0.5*Math.sin(x/w*Math.PI*16))}%)`; g.fillRect(x,0,1,64); } });
 const curtainMats = [];
 const curtainMat = () => { const m = new THREE.MeshLambertMaterial({ map:curtain }); curtainMats.push(m); return m; };
-add(new THREE.PlaneGeometry(16, 9), curtainMat(), 0, 3, 5).rotation.y = Math.PI;
-for (const s of [-1,1]) add(new THREE.PlaneGeometry(10, 9), curtainMat(), 7*s, 3, 0).rotation.y = -s*Math.PI/2;
+const curtainBack = add(new THREE.PlaneGeometry(16, 9), curtainMat(), 0, 3, 5); curtainBack.rotation.y = Math.PI;
+const curtainSides = [-1,1].map(s => { const c = add(new THREE.PlaneGeometry(10, 9), curtainMat(), 7*s, 3, 0); c.rotation.y = -s*Math.PI/2; return c; });
 const signCv = document.createElement('canvas'); signCv.width = 1024; signCv.height = 188;
 const signTex = new THREE.CanvasTexture(signCv); signTex.colorSpace = THREE.SRGBColorSpace;
-add(new THREE.PlaneGeometry(6, 1.1), basic(0xffffff, { map:signTex }), 0, 5.4, 4.95).rotation.y = Math.PI;
+const signMesh = add(new THREE.PlaneGeometry(6, 1.1), basic(0xffffff, { map:signTex }), 0, 5.4, 4.95); signMesh.rotation.y = Math.PI;
 function drawSign(text){ const g = signCv.getContext('2d');
   g.fillStyle = '#1a0f24'; g.fillRect(0, 0, 1024, 188); g.fillStyle = '#ffc94d'; g.font = 'bold 92px system-ui'; g.textAlign = 'center'; g.fillText(text, 512, 128);
   signTex.needsUpdate = true; }
@@ -242,6 +271,10 @@ add(new THREE.BoxGeometry(18, 0.25, 0.25), lamb(0x333340), 0, 7, -3);
 // light beams sweeping the crowd
 const beamGeo = new THREE.ConeGeometry(1.4, 9, 24, 1, true).translate(0, -4.5, 0);
 const beams = [-5,-2,2,5].map((x, i) => { const b = add(beamGeo, basic(LANES[i], { transparent:true, opacity:0.1, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }), x, 7, -3); return b; });
+// follow-spot: a cone of light from above the crowd that swings onto whichever cat is singing
+const follow = add(new THREE.ConeGeometry(0.8, 1, 24, 1, true).translate(0, -0.5, 0).rotateX(-Math.PI/2),
+  basic(0xffffff, { transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }), 0, 9, -7);
+const followAim = new THREE.Vector3(0, 1, -1);
 
 // ---------- cats ----------
 const PINK = lamb(0xff9db5), DARK = basic(0x111111), WHITE = lamb(0xffffff);
@@ -294,16 +327,38 @@ const arms = [-1,1].map(s => { const a = new THREE.Group(); a.position.set(0.24*
   add(new THREE.CylinderGeometry(0.01, 0.01, 0.35).rotateX(Math.PI/2).translate(0, 0, 0.45), lamb(0xf5deb3), 0, 0, 0, a);
   return a; });
 
-// audience: instanced cats on raked tiers with glowing eyes
-// built for the biggest venue (front rows first); smaller venues just draw fewer cats
-const AUD = [], seatRows = []; const AUD_FURS = [0xe8964a,0x8a8a96,0x2a2a30,0xeeeeee,0xd9c3a0,0x7a5236,0xc0c0c8];
-for (let r=0; r<20; r++){
-  const n = 14 + Math.floor(r*1.5), z = -7.5 - r*1.3, y = -1.5 + r*0.28;
-  if (r) seatRows.push(add(new THREE.BoxGeometry(n*0.85+1, y+1.5, 1.3), lamb(0x1d1626), 0, (y-1.5)/2, z));
-  for (let i=0;i<n;i++) AUD.push({ x:(i-(n-1)/2)*0.85 + (Math.random()-0.5)*0.2, y, z: z+(Math.random()-0.5)*0.3, row: r,
-    ph: Math.random()*6.28, s: 0.85+Math.random()*0.3, fur: AUD_FURS[Math.random()*AUD_FURS.length|0] });
+// audience: instanced cats with glowing eyes; each venue (venues.js) places them and sets the crowd size
+const VENUES = buildVenues({ THREE, scene, add, lamb, basic, canvasTex });
+const AUD_FURS = [0xe8964a,0x8a8a96,0x2a2a30,0xeeeeee,0xd9c3a0,0x7a5236,0xc0c0c8];
+const AUD = Array.from({ length: Math.max(...VENUES.map(v => v.crowd.length)) }, () => ({ x:0, y:-50, z:0, face:0,
+  ph: Math.random()*6.28, s: 0.85+Math.random()*0.3, fur: AUD_FURS[Math.random()*AUD_FURS.length|0] }));
+let audCount = 0;
+
+// you on stage: a music stand by the podium, and (Stadium) a cat conductor on the big screens that moves with you
+add(new THREE.CylinderGeometry(0.012, 0.02, 1.0, 8), lamb(0x222222), 1.15, 0.5, -0.35);
+const musicStand = add(new THREE.PlaneGeometry(0.5, 0.36), lamb(0xffffff), 1.15, 1.1, -0.35);
+musicStand.material.map = canvasTex(256, 184, (g, w, h) => { g.fillStyle = '#f4ecd8'; g.fillRect(0, 0, w, h); g.strokeStyle = '#333'; g.fillStyle = '#222';
+  for (let s=0; s<3; s++) { for (let l=0; l<5; l++) { g.beginPath(); g.moveTo(12, 20 + s*58 + l*7); g.lineTo(w-12, 20 + s*58 + l*7); g.stroke(); }
+    for (let n=0; n<9; n++) { g.beginPath(); g.ellipse(30 + n*24, 22 + s*58 + ((n*5 + s*3) % 8)*3.5, 4.5, 3.2, -0.4, 0, 7); g.fill(); } } });
+musicStand.rotation.x = -0.6;
+const AVATAR_LAYER = 3; // layers 1 and 2 are WebXR's left/right eye; 3 is seen only by the screen camera
+const avatar = makeCat(0x1a1a1a, '#ffffff');
+add(new THREE.CylinderGeometry(0.13, 0.13, 0.22, 16), basic(0x111111), 0, 0.3, 0, avatar.userData.head);
+add(new THREE.CylinderGeometry(0.21, 0.21, 0.02, 16), basic(0x111111), 0, 0.19, 0, avatar.userData.head);
+avatar.traverse(o => o.layers.set(AVATAR_LAYER)); scene.add(avatar);
+const screenRT = new THREE.WebGLRenderTarget(512, 288); screenRT.texture.colorSpace = THREE.SRGBColorSpace;
+const screenCam = new THREE.PerspectiveCamera(32, 16/9, 0.1, 200); screenCam.position.set(0, 6, -14); screenCam.lookAt(0, 1.2, 0);
+screenCam.layers.enable(AVATAR_LAYER);
+VENUES[4].screens.forEach(s => { s.material.map = screenRT.texture; s.material.color.set(0xffffff); s.material.needsUpdate = true; });
+let screenFrame = 0;
+function updateScreens(){
+  camera.getWorldPosition(TIP); const yaw = new THREE.Euler().setFromQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+  avatar.position.set(TIP.x, 0, TIP.z); avatar.rotation.y = yaw + Math.PI; avatar.scale.setScalar(Math.max(0.8, TIP.y/0.95));
+  if (venue !== 4 || screenFrame++ % 3) return; // shortcut: the feed refreshes every 3rd frame to save GPU; every frame if the Quest has headroom
+  const prev = renderer.getRenderTarget(), xr = renderer.xr.enabled;
+  renderer.xr.enabled = false; renderer.setRenderTarget(screenRT); renderer.render(scene, screenCam);
+  renderer.setRenderTarget(prev); renderer.xr.enabled = xr;
 }
-let audCount = AUD.length;
 const mat4 = (x, y, z, rz, sx, sy=sx, sz=sx) => new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),
   new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,rz)), new THREE.Vector3(sx,sy,sz));
 const SPH_LO = new THREE.SphereGeometry(1, 10, 8), EAR = new THREE.ConeGeometry(1, 1, 8);
@@ -333,10 +388,14 @@ function applyVenue(k){
   scene.background.setHex(v.bg); scene.fog.color.setHex(v.bg);
   curtainMats.forEach(m => m.color.setHex(v.curtain));
   drawSign(`★ ${v.venue.toUpperCase()} ★`);
-  audCount = Math.min(AUD.length, v.crowd);
+  VENUES.forEach((x, i) => x.group.visible = i === k); const V = VENUES[k];
+  V.crowd.forEach((p, i) => Object.assign(AUD[i], p));
+  audCount = V.crowd.length;
   audParts.forEach(p => p.mesh.count = audCount);
   sticks.count = STICKS.filter(s => s.cat < audCount).length;
-  seatRows.forEach((b, i) => b.visible = i < AUD[audCount-1].row); // seatRows[i] is row i+1
+  curtainBack.visible = V.curtains !== 'none'; curtainSides.forEach(c => c.visible = V.curtains === 'all'); signMesh.visible = V.sign;
+  scene.fog.near = V.fog[0]; scene.fog.far = V.fog[1];
+  placeMurmur();
   beams.forEach((b, i) => b.visible = BEAM_ORDER.indexOf(i) < v.beams);
   drummer.visible = v.drummer;
 }
@@ -349,29 +408,49 @@ const hitBar = add(new THREE.BoxGeometry(1.3, 0.01, 0.02), basic(0xffffff), 0, H
 const allPads = ALL.map(c => { const p = add(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 24), basic(c.clone()), 0, HY+0.015, HIT_Z); p.userData.glow = 0; return p; });
 const allBursts = ALL.map(c => { const b = add(new THREE.RingGeometry(0.1, 0.14, 32).rotateX(-Math.PI/2), basic(c, { transparent:true, side:THREE.DoubleSide }), 0, HY+0.04, HIT_Z); b.visible = false; b.userData.t = -9; return b; });
 let pads = LAYOUTS[4].map(g => allPads[g]), bursts = LAYOUTS[4].map(g => allBursts[g]);
-// sparkles: hit bursts and the maestro's baton trail on hold notes
-const SPARK_N = 200, sparkPos = new Float32Array(SPARK_N*3), sparkCol = new Float32Array(SPARK_N*3),
-  sparkBase = new Float32Array(SPARK_N*3), sparkVel = new Float32Array(SPARK_N*3), sparkAge = new Float32Array(SPARK_N).fill(9);
-const SPARK_LIFE = 0.8; let sparkNext = 0;
-const sparkGeo = new THREE.BufferGeometry();
-sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3)); sparkGeo.setAttribute('color', new THREE.BufferAttribute(sparkCol, 3));
+// particles: one pool of small sparkles (hits, baton trail) and one of big ones (fireworks, confetti, fountains)
 const sparkTex = canvasTex(64, 64, g => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
   r.addColorStop(0, '#fff'); r.addColorStop(0.35, 'rgba(255,255,255,0.6)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
-const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ size:0.05, map:sparkTex, vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
-sparks.frustumCulled = false; scene.add(sparks);
-function spark(p, color){
-  const i = sparkNext++ % SPARK_N, j = i*3;
-  sparkPos[j] = p.x; sparkPos[j+1] = p.y; sparkPos[j+2] = p.z;
-  sparkVel[j] = (Math.random()-0.5)*0.8; sparkVel[j+1] = 0.3 + Math.random()*0.8; sparkVel[j+2] = (Math.random()-0.5)*0.8;
-  sparkBase[j] = color.r; sparkBase[j+1] = color.g; sparkBase[j+2] = color.b; sparkAge[i] = 0;
+function makeParticles(N, size){
+  const pos = new Float32Array(N*3), col = new Float32Array(N*3), base = new Float32Array(N*3), vel = new Float32Array(N*3),
+    age = new Float32Array(N).fill(9), life = new Float32Array(N), grav = new Float32Array(N), geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size, map:sparkTex, vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, fog:false }));
+  pts.frustumCulled = false; scene.add(pts); let next = 0;
+  return {
+    emit(p, color, vx, vy, vz, lifeS, g){ const i = next++ % N, j = i*3;
+      pos[j] = p.x; pos[j+1] = p.y; pos[j+2] = p.z; vel[j] = vx; vel[j+1] = vy; vel[j+2] = vz;
+      base[j] = color.r; base[j+1] = color.g; base[j+2] = color.b; age[i] = 0; life[i] = lifeS; grav[i] = g; },
+    update(dt){ for (let i=0; i<N; i++){ const j = i*3;
+        if (age[i] >= life[i]) { col[j] = col[j+1] = col[j+2] = 0; continue; }
+        age[i] += dt; vel[j+1] -= grav[i]*dt; const k = Math.max(0, 1 - age[i]/life[i]);
+        for (let a=0; a<3; a++) { pos[j+a] += vel[j+a]*dt; col[j+a] = base[j+a]*k; } }
+      geo.attributes.position.needsUpdate = geo.attributes.color.needsUpdate = true; },
+  };
 }
-function updateSparks(dt){
-  for (let i=0; i<SPARK_N; i++){ const j = i*3;
-    if (sparkAge[i] >= SPARK_LIFE) { sparkCol[j] = sparkCol[j+1] = sparkCol[j+2] = 0; continue; }
-    sparkAge[i] += dt; sparkVel[j+1] -= 1.2*dt;
-    for (let a=0; a<3; a++) { sparkPos[j+a] += sparkVel[j+a]*dt; sparkCol[j+a] = sparkBase[j+a] * Math.max(0, 1 - sparkAge[i]/SPARK_LIFE); }
-  }
-  sparkGeo.attributes.position.needsUpdate = sparkGeo.attributes.color.needsUpdate = true;
+const smallFx = makeParticles(200, 0.05), bigFx = makeParticles(900, 0.35);
+const rnd = (a, b) => a + Math.random()*(b - a);
+const spark = (p, color) => smallFx.emit(p, color, rnd(-0.4, 0.4), rnd(0.3, 1.1), rnd(-0.4, 0.4), 0.8, 1.2);
+const updateSparks = dt => { smallFx.update(dt); bigFx.update(dt); };
+const FX_COLORS = [...ALL, new THREE.Color('#ffffff'), new THREE.Color('#ffd27a')];
+function firework(at){ // a burst of 70 sparks on a sphere, then a boom from where it went off
+  const c = FX_COLORS[Math.random()*FX_COLORS.length|0], s = rnd(5, 8);
+  for (let i=0;i<70;i++){ const u = rnd(-1, 1), a = rnd(0, Math.PI*2), r = Math.sqrt(1 - u*u); bigFx.emit(at, c, s*r*Math.cos(a), s*u, s*r*Math.sin(a), rnd(1.3, 1.9), 2.5); }
+  if (ctx) boom(at);
+}
+function confetti(n = 120){ // falls over the stage and the front of the crowd
+  for (let i=0;i<n;i++) bigFx.emit(new THREE.Vector3(rnd(-7, 7), rnd(6, 9), rnd(-9, 2)), FX_COLORS[i % FX_COLORS.length], rnd(-0.4, 0.4), rnd(-0.6, 0), rnd(-0.4, 0.4), rnd(3.5, 5), 0.25);
+}
+function fountains(){ // sparkler jets along the front edge of the stage
+  for (const x of [-6, -3, 3, 6]) for (let i=0;i<25;i++){ const c = new THREE.Color(1, rnd(0.6, 0.9), 0.4);
+    bigFx.emit(new THREE.Vector3(x, 0.05, -4.9), c, rnd(-0.4, 0.4), rnd(4, 6.5), rnd(-0.4, 0.4), rnd(0.9, 1.4), 6); }
+}
+// one burst of whatever this venue does (phrase endings); the finale fires several
+function celebrate(big = false){
+  const V = VENUES[venue];
+  if (V.fx.fireworks) for (let i=0; i < (big ? 4 : 1 + (venue === 4)); i++) setTimeout(() => firework(V.fireworkAt()), i*350);
+  if (V.fx.fountains) fountains();
+  if (V.fx.confetti && (big || !V.fx.fireworks)) confetti(big ? 200 : 90);
 }
 const beatLines = Array.from({ length:16 }, () => add(new THREE.BoxGeometry(1.3, 0.004, 0.015), basic(0xffffff, { transparent:true, opacity:0.2 }), 0, HY+0.004, 0));
 const pawTex = canvasTex(128, 128, g => {
@@ -477,7 +556,7 @@ function drawResults(){
 }
 
 // ---------- game ----------
-let state = 'menu', S = null, cheerUntil = 0, judgeT = -9, hudT = 0, paused = false;
+let state = 'menu', S = null, cheerUntil = 0, judgeT = -9, hudT = 0, paused = false, lastMissT = -9;
 // pause = suspend the audio clock: every note, beat and meow is timed from it, so the whole song freezes
 const PAUSE_BTN = [[300, 420], [480, 600]]; // Resume, Quit (menu canvas y ranges)
 function pause(on){
@@ -510,7 +589,7 @@ function startSong(i){
     const tail = hold ? new THREE.Mesh(tailGeo, basic(LANES[n.lane], { transparent:true, opacity:0.55 })) : null;
     if (tail) { tail.visible = false; noteGroup.add(tail); }
     return { ...n, time, end: time + n.secs*0.85, hold, tail, mesh, judged:false }; });
-  S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:Array(5).fill(null) };
+  S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, segIdx:1, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:Array(5).fill(null) };
   state = 'play'; menu.mesh.visible = false; hud.mesh.visible = true; drawHud(); needCalib = 3;
 }
 function clearNotes(){
@@ -531,7 +610,8 @@ function endSong(){
   best[S.song.title] = { stars: Math.max(S.stars, prev?.stars || 0), score: Math.max(S.score, prev?.score || 0) }; saveBest();
   S.newVenue = k+1 < TIERS.length && !wasOpen && unlocked(k+1);
   S.newBest = !prev || S.score > prev.score;
-  state = 'results'; clearNotes(); applause(); cheerUntil = perfNow() + 3; drawResults(); menu.mesh.visible = true;
+  state = 'results'; clearNotes(); applause(); cheerUntil = perfNow() + 4; drawResults(); menu.mesh.visible = true;
+  celebrate(true); setTimeout(() => celebrate(true), 1600); // the finale
 }
 function melodyAt(beat){ let m = S.notes[0].midi; for (const n of S.notes) { if (n.beat > beat) break; m = n.midi; } return m; }
 function scheduleBacking(){
@@ -546,7 +626,7 @@ function scheduleBacking(){
     S.nextHat += song.hat;
   }
 }
-function miss(n){ n.judged = true; n.mesh.visible = false; if (n.tail) n.tail.visible = false; S.combo = 0; S.miss++; showJudge('MISS', '#ff6b6b'); drawHud(); }
+function miss(n){ lastMissT = perfNow(); n.judged = true; n.mesh.visible = false; if (n.tail) n.tail.visible = false; S.combo = 0; S.miss++; showJudge('MISS', '#ff6b6b'); drawHud(); }
 // canHold=false: a baton flick without the trigger down plays a hold note as a plain tap
 function press(lane, ctrl, canHold = true){
   if (paused || lane >= LANES.length) return; // e.g. L key on a 4-lane song
@@ -566,7 +646,8 @@ function press(lane, ctrl, canHold = true){
   S.score += (perfect ? 100 : 50) * mult();
   const hold = hit.hold && canHold;
   if (hit.hold && !hold) hit.tail.visible = false;
-  const len = hold ? hit.end - now + 0.1 : Math.min(0.55, Math.max(0.22, hit.secs*0.9));
+  // legato: a meow lasts its whole note and fades into the next one, so phrases sound sung, not drummed
+  const len = hold ? hit.end - now + 0.1 : Math.min(1.6, Math.max(0.3, hit.secs + 0.12));
   const voice = meow(hit.midi + S.shift + PITCH_UP, ctx.currentTime, len, 0.3, LAY[lane]); // the lane's own cat sings
   if (hold) { hit.holding = true; hit.tail.material.opacity = 0.95; S.holds[lane] = { n:hit, voice, ctrl }; }
   band[lane].userData.singT = perfNow(); bursts[lane].userData.t = perfNow();
@@ -637,6 +718,10 @@ const ctrls = [0, 1].map(i => {
     new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0.5 })));
   add(new THREE.CylinderGeometry(0.008, 0.012, 0.3).rotateX(Math.PI/2).translate(0, 0, -0.15), lamb(0xf5deb3), 0, 0, 0, c); // conductor baton
   c.userData.tip = add(SPH, basic(0xffffff), 0, 0, -0.3, c); c.userData.tip.scale.setScalar(0.015);
+  // a white conductor's glove holding the baton
+  add(SPH, WHITE, 0, -0.012, 0.03, c).scale.set(0.042, 0.03, 0.06);
+  for (let f=0; f<4; f++) add(new THREE.CapsuleGeometry(0.009, 0.03, 4, 8), WHITE, -0.018 + f*0.012, 0.012, -0.004 - f*0.002, c).rotation.x = Math.PI/2 - 0.5;
+  add(new THREE.CylinderGeometry(0.03, 0.036, 0.04, 12).rotateX(Math.PI/2), WHITE, 0, -0.01, 0.1, c); // cuff
   c.userData.prevTip = new THREE.Vector3(); c.userData.vy = 0; c.userData.flickT = -9; c.userData.lastLane = -1; c.userData.lastLaneT = -9;
   rig.add(c);
   c.userData.cursor = add(new THREE.RingGeometry(0.06, 0.09, 24).rotateX(-Math.PI/2), basic(0xffffff, { transparent:true, opacity:0.8, side:THREE.DoubleSide }), 0, HY+0.05, HIT_Z);
@@ -644,7 +729,7 @@ const ctrls = [0, 1].map(i => {
 });
 
 // ---------- loop ----------
-const M = new THREE.Matrix4(), base = new THREE.Matrix4(), V = new THREE.Vector3(), RZ = new THREE.Matrix4(), TIP = new THREE.Vector3();
+const M = new THREE.Matrix4(), base = new THREE.Matrix4(), V = new THREE.Vector3(), RZ = new THREE.Matrix4(), TIP = new THREE.Vector3(), TMP_C = new THREE.Color();
 const FLICK_VY = 0.6;      // m/s upward baton speed that counts as a conducting stroke
 let batonPeak = 0;         // fastest recent upward stroke, shown on the HUD for tuning
 const PAUSE_BUTTONS = [4, 5, 6, 7, 8, 9, 10, 11, 12]; // A/B/X/Y and any extra (e.g. menu) buttons the browser exposes
@@ -672,7 +757,7 @@ function tick(){
   let beatPos = time*1.5, exc = 0.06;
   if (renderer.xr.isPresenting && needCalib > 0 && --needCalib === 0) calibrate();
   ctrls.forEach(c => maestro(c, time, dt));
-  updateSparks(dt);
+  updateSparks(dt); VENUES[venue].update(time, dt);
   if (state === 'play' && paused) beatPos = beatAt(S.segs, songNow() - S.t0);
   else if (state === 'play'){
     scheduleBacking();
@@ -694,22 +779,43 @@ function tick(){
     beatLines.forEach((bl, k) => { const b = first + k*h, d = (timeAt(S.segs, b) - st)*SPEED;
       bl.visible = d < LEN && b >= 0 && b <= S.length; bl.position.z = HIT_Z - d; });
     if (time - hudT > 0.25) { drawHud(); hudT = time; }
+    if (S.segIdx < S.segs.length && st >= S.segs[S.segIdx].t) { S.segIdx++; celebrate(); } // a phrase just ended
     if (st > S.secs + 1.5) endSong();
   }
-  const holding = state === 'play' && !paused && S.holds.some(Boolean);
-  if (time < cheerUntil || holding) exc = 0.45;
+  const holding = state === 'play' && !paused && S.holds.some(Boolean), cheering = time < cheerUntil;
+  if (cheering || holding) exc = 0.45;
+  if (time - lastMissT < 1.2) exc *= 0.3; // a miss and the crowd goes quiet for a moment
+  const stand = cheering ? 0.25 : 0;      // finale: everyone on their feet
+  if (ctx) { // the listener is your head, so every cat and the crowd are heard from where they are
+    const L = ctx.listener; camera.getWorldPosition(TIP); V.set(0, 0, -1).transformDirection(camera.matrixWorld);
+    if (L.positionX) { L.positionX.value = TIP.x; L.positionY.value = TIP.y; L.positionZ.value = TIP.z;
+      L.forwardX.value = V.x; L.forwardY.value = V.y; L.forwardZ.value = V.z; L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0; }
+    murmur.forEach(m => m.g.gain.value = (m.base || 0)*(0.4 + 2*exc));
+  }
 
   for (let i=0;i<audCount;i++){
-    const a = AUD[i], bob = Math.abs(Math.cos(beatPos*Math.PI + a.ph*0.3)) * exc;
-    base.makeRotationY(Math.sin(time*0.7 + a.ph)*0.25).scale(V.setScalar(a.s)).setPosition(a.x, a.y + bob, a.z);
+    const a = AUD[i], bob = Math.abs(Math.cos(beatPos*Math.PI + a.ph*0.3)) * exc + stand;
+    base.makeRotationY(a.face + Math.sin(time*0.7 + a.ph)*0.25).scale(V.setScalar(a.s)).setPosition(a.x, a.y + bob, a.z);
     for (const p of audParts) p.mesh.setMatrixAt(i, M.multiplyMatrices(base, p.local));
   }
   audParts.forEach(p => p.mesh.instanceMatrix.needsUpdate = true);
-  STICKS.forEach((s, i) => { if (i >= sticks.count) return; const a = AUD[s.cat], bob = Math.abs(Math.cos(beatPos*Math.PI + a.ph*0.3)) * exc;
-    base.makeRotationY(Math.sin(time*0.7 + a.ph)*0.25).scale(V.setScalar(a.s)).setPosition(a.x, a.y + bob, a.z);
-    sticks.setMatrixAt(i, M.multiplyMatrices(base, RZ.makeRotationZ(Math.sin(time*3 + s.ph)*0.6).setPosition(0.24, 0.75, 0.05))); });
+  // glowsticks come out (and wave harder) as your streak grows
+  const streak = cheering ? 1 : state === 'play' ? Math.min(S.combo, 30)/30 : 0.3, wave = 0.3 + 0.7*streak;
+  STICKS.forEach((s, i) => { const a = AUD[s.cat], on = s.cat < audCount && (i % 4) < 1 + 3*streak;
+    if (!on) { sticks.setMatrixAt(i, M.makeScale(0, 0, 0)); return; }
+    const bob = Math.abs(Math.cos(beatPos*Math.PI + a.ph*0.3)) * exc + stand;
+    base.makeRotationY(a.face + Math.sin(time*0.7 + a.ph)*0.25).scale(V.setScalar(a.s)).setPosition(a.x, a.y + bob, a.z);
+    sticks.setMatrixAt(i, M.multiplyMatrices(base, RZ.makeRotationZ(Math.sin(time*(3 + 3*streak) + s.ph)*wave).setPosition(0.24, 0.75, 0.05))); });
   sticks.instanceMatrix.needsUpdate = true;
 
+  // stage glows in the colour of the note you're holding
+  const heldLane = holding ? S.holds.findIndex(Boolean) : -1;
+  stageMat.emissive.lerp(heldLane >= 0 ? TMP_C.copy(LANES[heldLane]).multiplyScalar(0.35) : TMP_C.setRGB(0, 0, 0), 0.1);
+  // follow-spot onto the most recent singer
+  let singer = -1; band.forEach((c, i) => { if (time - c.userData.singT < 0.6 && (singer < 0 || c.userData.singT > band[singer].userData.singT)) singer = i; });
+  if (singer >= 0) { band[singer].getWorldPosition(TIP); followAim.lerp(TIP.setY(TIP.y + 0.8), 0.15); follow.material.color.copy(LANES[singer]); }
+  follow.lookAt(followAim); follow.scale.z = follow.position.distanceTo(followAim);
+  follow.material.opacity += ((singer >= 0 ? 0.14 : 0) - follow.material.opacity)*0.1;
   const sweep = holding ? 2.5 : 0.6; // light show speeds up and brightens while you hold a note
   beams.forEach((b, i) => { b.rotation.z = Math.sin(time*sweep + i)*0.45; b.rotation.x = Math.cos(time*sweep*0.7 + i*2)*0.3; b.material.opacity = holding ? 0.25 : 0.1; });
   band.forEach(c => { const u = c.userData, k = Math.max(0, 1 - (time - u.singT)/0.4);
@@ -723,6 +829,7 @@ function tick(){
   ctrls.forEach(c => { const l = c.userData.src && state === 'play' ? aimedLane(c) : -1, cur = c.userData.cursor;
     cur.visible = l >= 0; if (l >= 0) { cur.position.x = LANE_X[l]; cur.material.color.copy(LANES[l]); } });
   if (!renderer.xr.isPresenting) camera.rotation.set(pitch, -yaw, 0, 'YXZ');
+  updateScreens();
   renderer.render(scene, camera);
 }
 setLayout(4);
