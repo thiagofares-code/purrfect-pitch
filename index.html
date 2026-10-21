@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -12,9 +12,9 @@
 </style>
 </head>
 <body>
-<div id="start"><h1>ðŸ± Purrfect Pitch</h1><p>Lead the cat choir. Click to start (sound on).</p></div>
-<div id="help">Desktop: drag to look Â· <b>D F J K</b> (+<b>L</b> from venue 3) hit lanes Â· <b>1â€“4</b> pick song Â· <b>â† â†’</b> venue Â· <b>Esc</b> menu<br>
-Quest: Enter VR Â· aim the baton at a lane and flick it up (or pull the trigger) Â· hold the trigger on long notes Â· menu/A/B/X/Y = pause Â· <b>P</b> pauses on desktop</div>
+<div id="start"><h1>🐱 Purrfect Pitch</h1><p>Lead the cat choir. Click to start (sound on).</p></div>
+<div id="help">Desktop: drag to look · <b>D F J K</b> (+<b>L</b> from venue 3) hit lanes · <b>1–4</b> pick song · <b>← →</b> venue · <b>Esc</b> menu<br>
+Quest: Enter VR · aim the baton at a lane and flick it up (or pull the trigger) · hold the trigger on long notes · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -24,7 +24,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=11';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v16'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v17'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -159,7 +159,7 @@ function meow(m, t, len, vol=0.3, slot=-1, at=null){
       piece(t, v.offset, v.dur*A, 0, X);
       const s = ctx.createBufferSource(), e = ctx.createGain(), vib = ctx.createOscillator(), vg = ctx.createGain();
       s.buffer = v.loop; s.loop = true; s.playbackRate.value = rate;
-      vib.frequency.value = 5.5; vib.connect(vg).connect(s.detune); // vibrato grows in like a singer's, up to Â±15 cents
+      vib.frequency.value = 5.5; vib.connect(vg).connect(s.detune); // vibrato grows in like a singer's, up to ±15 cents
       vg.gain.setValueAtTime(0, loopAt); vg.gain.linearRampToValueAtTime(15, loopAt + 0.6);
       e.gain.setValueAtTime(0, loopAt); e.gain.linearRampToValueAtTime(1, loopAt + X);
       e.gain.setValueAtTime(1, tailAt); e.gain.linearRampToValueAtTime(0, tailAt + X);
@@ -374,7 +374,7 @@ function applyVenue(k){
   venue = k; const v = TIERS[k];
   scene.background.setHex(v.bg); scene.fog.color.setHex(v.bg);
   curtainMats.forEach(m => m.color.setHex(v.curtain));
-  drawSign(`â˜… ${v.venue.toUpperCase()} â˜…`);
+  drawSign(`★ ${v.venue.toUpperCase()} ★`);
   VENUES.forEach((x, i) => x.group.visible = i === k); const V = VENUES[k];
   V.crowd.forEach((p, i) => Object.assign(AUD[i], p));
   audCount = V.crowd.length;
@@ -462,7 +462,7 @@ function drawLabels(){
   const g = labelTex.image.getContext('2d'), w = 1024, n = LANES.length; g.clearRect(0, 0, w, 102);
   g.textAlign = 'center'; g.font = 'bold 30px system-ui';
   LANE_X.forEach((_, i) => { g.fillStyle = LANE_HEX[i]; g.fillText(KEYS[i], w*(i+0.5)/n, 40); });
-  g.fillStyle = '#cbb8ff'; g.fillText('aim + flick baton up Â· hold trigger on long notes', w/2, 85); labelTex.needsUpdate = true;
+  g.fillStyle = '#cbb8ff'; g.fillText('aim + flick baton up · hold trigger on long notes', w/2, 85); labelTex.needsUpdate = true;
 }
 // switch the highway, pads, notes and singers between 4 and 5 lanes
 function setLayout(n){
@@ -493,24 +493,24 @@ const judge = makePanel(1.0, 0.25, 512); judge.mesh.position.set(0, HY+0.45, -1.
 
 function drawMenu(){ const v = TIERS[venue], open = unlocked(venue); menu.redraw((g, W, H) => {
   box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.9)');
-  g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = 'bold 64px system-ui'; g.fillText(`Venue ${venue+1} Â· ${v.venue}`, W/2, 80);
+  g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = 'bold 64px system-ui'; g.fillText(`Venue ${venue+1} · ${v.venue}`, W/2, 80);
   g.font = '32px system-ui'; g.fillStyle = '#cbb8ff'; const d = difficultyFor(venue*4);
-  g.fillText(`Rank: ${v.rank}  Â·  ${d.lanes} lanes${d.doubles ? d.doubles > 1 ? ' Â· lots of double notes' : ' Â· double notes' : ''}  Â·  â˜… ${tierStars(venue)} / 12`, W/2, 135);
+  g.fillText(`Rank: ${v.rank}  ·  ${d.lanes} lanes${d.doubles ? d.doubles > 1 ? ' · lots of double notes' : ' · double notes' : ''}  ·  ★ ${tierStars(venue)} / 12`, W/2, 135);
   for (let i=0;i<4;i++){
     const s = SONGS[venue*4+i], y = CARD_Y + i*CARD_STEP, st = best[s.title]?.stars || 0;
     box(g, 60, y, W-120, CARD_H, 22, open ? MENU_HEX[i] : '#3a2a50');
     g.fillStyle = open ? '#1a0f24' : '#8a7aa0'; g.textAlign = 'left';
     g.font = `bold ${s.title.length > 26 ? 34 : 42}px system-ui`; g.fillText(s.title, 95, y+50);
     g.font = '28px system-ui'; g.fillText(s.composer, 95, y+88);
-    g.textAlign = 'right'; g.font = 'bold 40px system-ui'; g.fillText(open ? 'â˜…'.repeat(st) + 'â˜†'.repeat(3-st) : 'ðŸ”’', W-95, y+50);
+    g.textAlign = 'right'; g.font = 'bold 40px system-ui'; g.fillText(open ? '★'.repeat(st) + '☆'.repeat(3-st) : '🔒', W-95, y+50);
     g.font = '26px system-ui'; g.fillText(!open ? '' : best[s.title] ? `best ${best[s.title].score.toLocaleString()}` : `key ${i+1}`, W-95, y+88);
   }
   g.textAlign = 'center';
-  if (!open) { g.fillStyle = '#ffc94d'; g.font = 'bold 30px system-ui'; g.fillText(`Earn ${STARS_TO_UNLOCK} â˜… at ${TIERS[venue-1].venue} to unlock`, W/2, NAV_Y-14); }
+  if (!open) { g.fillStyle = '#ffc94d'; g.font = 'bold 30px system-ui'; g.fillText(`Earn ${STARS_TO_UNLOCK} ★ at ${TIERS[venue-1].venue} to unlock`, W/2, NAV_Y-14); }
   g.font = 'bold 34px system-ui';
-  if (venue > 0) { box(g, 60, NAV_Y, 300, 80, 20, '#5a4a80'); g.fillStyle = '#fff'; g.fillText('â—€ Prev venue', 210, NAV_Y+52); }
-  if (venue < TIERS.length-1) { box(g, W-360, NAV_Y, 300, 80, 20, '#5a4a80'); g.fillStyle = '#fff'; g.fillText('Next venue â–¶', W-210, NAV_Y+52); }
-  g.fillStyle = '#8a7aa0'; g.font = '24px system-ui'; g.fillText('â† â†’ keys', W/2, NAV_Y+42); g.fillText(BUILD, W/2, NAV_Y+74);
+  if (venue > 0) { box(g, 60, NAV_Y, 300, 80, 20, '#5a4a80'); g.fillStyle = '#fff'; g.fillText('◀ Prev venue', 210, NAV_Y+52); }
+  if (venue < TIERS.length-1) { box(g, W-360, NAV_Y, 300, 80, 20, '#5a4a80'); g.fillStyle = '#fff'; g.fillText('Next venue ▶', W-210, NAV_Y+52); }
+  g.fillStyle = '#8a7aa0'; g.font = '24px system-ui'; g.fillText('← → keys', W/2, NAV_Y+42); g.fillText(BUILD, W/2, NAV_Y+74);
 }); }
 function changeVenue(d){ const k = venue + d; if (k < 0 || k >= TIERS.length) return; applyVenue(k); drawMenu(); }
 function pickSong(i){ if (unlocked(venue)) startSong(venue*4 + i); }
@@ -530,11 +530,11 @@ function drawResults(){
   menu.redraw((g, W, H) => {
     box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.9)'); g.textAlign = 'center';
     g.fillStyle = '#ffc94d'; g.font = 'bold 84px system-ui'; g.fillText(['Hiss... try again','Nice meowing!','Great show!','PURRFECT SHOW!'][stars], W/2, 120);
-    g.font = '90px system-ui'; g.fillText('â˜…'.repeat(stars) + 'â˜†'.repeat(3-stars), W/2, 240);
+    g.font = '90px system-ui'; g.fillText('★'.repeat(stars) + '☆'.repeat(3-stars), W/2, 240);
     g.fillStyle = '#fff'; g.font = 'bold 56px system-ui'; g.fillText(S.score.toLocaleString() + ' pts', W/2, 340);
     g.font = '38px system-ui'; g.fillStyle = '#cbb8ff';
-    g.fillText(`${Math.round(acc*100)}% accuracy Â· max combo ${S.maxCombo}`, W/2, 410);
-    g.fillText(`${S.perfect} purrfect Â· ${S.good} good Â· ${S.miss} miss`, W/2, 465);
+    g.fillText(`${Math.round(acc*100)}% accuracy · max combo ${S.maxCombo}`, W/2, 410);
+    g.fillText(`${S.perfect} purrfect · ${S.good} good · ${S.miss} miss`, W/2, 465);
     g.fillStyle = '#8cff66'; g.font = 'bold 44px system-ui';
     if (S.newVenue) g.fillText(`New venue unlocked: ${TIERS[Math.floor(S.idx/4)+1].venue}!`, W/2, 570);
     else if (S.newBest) g.fillText('New best score!', W/2, 570);
@@ -555,7 +555,7 @@ function drawPause(){ menu.redraw((g, W, H) => {
   box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.92)'); g.textAlign = 'center';
   g.fillStyle = '#fff'; g.font = 'bold 84px system-ui'; g.fillText('Paused', W/2, 140);
   g.font = '36px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText(S.song.title, W/2, 210);
-  [['â–¶ Resume', '#8cff66'], ['Quit to venue', '#ff9db5']].forEach(([t, c], i) => { const [y0, y1] = PAUSE_BTN[i];
+  [['▶ Resume', '#8cff66'], ['Quit to venue', '#ff9db5']].forEach(([t, c], i) => { const [y0, y1] = PAUSE_BTN[i];
     box(g, 260, y0, W-520, y1-y0, 26, c); g.fillStyle = '#1a0f24'; g.font = 'bold 52px system-ui'; g.fillText(t, W/2, y0 + 78); });
   g.fillStyle = '#cbb8ff'; g.font = '30px system-ui'; g.fillText('Menu or A/B/X/Y button (P on keyboard) also resumes', W/2, 690);
 }); }
