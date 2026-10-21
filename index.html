@@ -14,7 +14,7 @@
 <body>
 <div id="start"><h1>🐱 Purrfect Pitch</h1><p>Lead the cat choir. Click to start (sound on).</p></div>
 <div id="help">Desktop: drag to look · <b>D F J K</b> hit lanes · <b>1–4</b> pick song · <b>← →</b> venue · <b>Esc</b> menu<br>
-Quest: Enter VR · point either controller at a lane (or a song) and pull the trigger</div>
+Quest: Enter VR · aim the baton at a lane and flick it up (or pull the trigger) · hold the trigger on long notes · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -42,12 +42,20 @@ const HOLD_MIN = 0.7; // seconds: notes at least this long become hold notes
 const perfNow = () => performance.now()/1000;
 
 // ---------- audio ----------
-let ctx, master, noise, lat = 0;
+let ctx, master, voiceBus, noise, lat = 0;
+const PITCH_UP = 3; // semitones: the choir sings a little above the written melody
 function initAudio(){
   if (ctx) { ctx.resume(); return; }
   ctx = new AudioContext();
   master = ctx.createGain(); master.gain.value = 0.6;
   master.connect(ctx.createDynamicsCompressor()).connect(ctx.destination);
+  // voices: brighter top end plus a short stage reverb so the choir sounds live
+  voiceBus = ctx.createGain(); voiceBus.gain.value = 1.2;
+  const shelf = ctx.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = 2500; shelf.gain.value = 6;
+  const verb = ctx.createConvolver(), wet = ctx.createGain(), ir = ctx.createBuffer(2, ctx.sampleRate*1.6, ctx.sampleRate);
+  for (let ch=0; ch<2; ch++){ const d = ir.getChannelData(ch); for (let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * (1 - i/d.length)**3; }
+  verb.buffer = ir; wet.gain.value = 0.25;
+  voiceBus.connect(shelf).connect(master); shelf.connect(verb).connect(wet).connect(master);
   noise = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
   const d = noise.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
   loadVoices();
@@ -81,7 +89,7 @@ function bestShift(notes){
 function meow(m, t, len, vol=0.3){
   const f = hz(m), g = ctx.createGain(), srcs = [], tail = Math.min(0.25, len*0.4), v = pickVoice(m, len);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+(v ? 0.01 : 0.03)); g.gain.setValueAtTime(vol, t+len-tail); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
-  g.connect(master);
+  g.connect(voiceBus);
   if (v){
     const s = ctx.createBufferSource(); s.buffer = v.buf; s.playbackRate.value = f / hz(v.midi);
     if (len > v.dur / s.playbackRate.value) { s.loop = true; s.loopStart = v.offset + v.dur*0.3; s.loopEnd = v.offset + v.dur*0.6; } // stretch held notes over the vowel
@@ -149,8 +157,19 @@ scene.background = new THREE.Color(0x0b0716);
 scene.fog = new THREE.Fog(0x0b0716, 16, 45);
 const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.05, 200);
 camera.position.set(0, 1.6, 0);
-renderer.xr.addEventListener('sessionstart', () => { initAudio(); renderer.xr.setFoveation?.(1); });
-renderer.xr.addEventListener('sessionend', () => camera.position.set(0, 1.6, 0));
+// player rig: the headset and controllers live inside it, so moving the rig moves you
+const rig = new THREE.Group(); rig.add(camera); scene.add(rig);
+const HEAD_Y = 1.55; // where your eyes end up: ~0.6 m above the note highway, seated or standing
+let needCalib = 0; // frames to wait before recentring the rig (0 = done)
+function calibrate(){
+  const yaw = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ').y;
+  const head = camera.position.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, -yaw);
+  rig.rotation.y = -yaw; // face the audience
+  rig.position.set(-head.x, HEAD_Y - head.y, -head.z);
+}
+renderer.xr.addEventListener('sessionstart', () => { initAudio(); renderer.xr.setFoveation?.(1); needCalib = 3; // wait a few frames for a real head pose
+  renderer.xr.getSession().addEventListener('visibilitychange', e => { if (e.session.visibilityState !== 'visible') pause(true); }); });
+renderer.xr.addEventListener('sessionend', () => { rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0); camera.position.set(0, 1.6, 0); });
 
 scene.add(new THREE.HemisphereLight(0x9988ff, 0x221122, 1.2));
 const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(2, 6, 3); scene.add(sun);
@@ -287,6 +306,28 @@ LANE_X.forEach((x, i) => add(new THREE.BoxGeometry(0.01, 0.005, LEN), basic(LANE
 add(new THREE.BoxGeometry(1.3, 0.01, 0.02), basic(0xffffff), 0, HY+0.01, HIT_Z);
 const pads = LANE_X.map((x, i) => { const p = add(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 24), basic(LANES[i].clone()), x, HY+0.015, HIT_Z); p.userData.glow = 0; return p; });
 const bursts = LANE_X.map((x, i) => { const b = add(new THREE.RingGeometry(0.1, 0.14, 32).rotateX(-Math.PI/2), basic(LANES[i], { transparent:true, side:THREE.DoubleSide }), x, HY+0.04, HIT_Z); b.visible = false; b.userData.t = -9; return b; });
+// sparkles: hit bursts and the maestro's baton trail on hold notes
+const SPARK_N = 200, sparkPos = new Float32Array(SPARK_N*3), sparkCol = new Float32Array(SPARK_N*3),
+  sparkBase = new Float32Array(SPARK_N*3), sparkVel = new Float32Array(SPARK_N*3), sparkAge = new Float32Array(SPARK_N).fill(9);
+const SPARK_LIFE = 0.8; let sparkNext = 0;
+const sparkGeo = new THREE.BufferGeometry();
+sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3)); sparkGeo.setAttribute('color', new THREE.BufferAttribute(sparkCol, 3));
+const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ size:0.035, vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+sparks.frustumCulled = false; scene.add(sparks);
+function spark(p, color){
+  const i = sparkNext++ % SPARK_N, j = i*3;
+  sparkPos[j] = p.x; sparkPos[j+1] = p.y; sparkPos[j+2] = p.z;
+  sparkVel[j] = (Math.random()-0.5)*0.8; sparkVel[j+1] = 0.3 + Math.random()*0.8; sparkVel[j+2] = (Math.random()-0.5)*0.8;
+  sparkBase[j] = color.r; sparkBase[j+1] = color.g; sparkBase[j+2] = color.b; sparkAge[i] = 0;
+}
+function updateSparks(dt){
+  for (let i=0; i<SPARK_N; i++){ const j = i*3;
+    if (sparkAge[i] >= SPARK_LIFE) { sparkCol[j] = sparkCol[j+1] = sparkCol[j+2] = 0; continue; }
+    sparkAge[i] += dt; sparkVel[j+1] -= 1.2*dt;
+    for (let a=0; a<3; a++) { sparkPos[j+a] += sparkVel[j+a]*dt; sparkCol[j+a] = sparkBase[j+a] * Math.max(0, 1 - sparkAge[i]/SPARK_LIFE); }
+  }
+  sparkGeo.attributes.position.needsUpdate = sparkGeo.attributes.color.needsUpdate = true;
+}
 const beatLines = Array.from({ length:16 }, () => add(new THREE.BoxGeometry(1.3, 0.004, 0.015), basic(0xffffff, { transparent:true, opacity:0.2 }), 0, HY+0.004, 0));
 const pawTex = canvasTex(128, 128, g => {
   g.fillStyle = '#fff'; g.beginPath(); g.arc(64, 64, 62, 0, 7); g.fill();
@@ -305,7 +346,7 @@ function drawTail(n, headD, now){
 const labels = add(new THREE.PlaneGeometry(1.3, 0.13), basic(0xffffff, { transparent:true, map: canvasTex(1024, 102, (g, w) => {
   g.textAlign = 'center'; g.font = 'bold 30px system-ui';
   LANE_X.forEach((_, i) => { g.fillStyle = LANE_HEX[i]; g.fillText(KEYS[i], w*(i+0.5)/4, 40); });
-  g.fillStyle = '#cbb8ff'; g.fillText('aim + pull trigger · keep holding on long notes', w/2, 85); }) }), 0, HY+0.01, HIT_Z+0.17);
+  g.fillStyle = '#cbb8ff'; g.fillText('aim + flick baton up · hold trigger on long notes', w/2, 85); }) }), 0, HY+0.01, HIT_Z+0.17);
 labels.rotation.x = -Math.PI/2 + 0.4;
 
 // ---------- floating panels ----------
@@ -371,7 +412,22 @@ function drawResults(){
 }
 
 // ---------- game ----------
-let state = 'menu', S = null, cheerUntil = 0, judgeT = -9, hudT = 0;
+let state = 'menu', S = null, cheerUntil = 0, judgeT = -9, hudT = 0, paused = false;
+// pause = suspend the audio clock: every note, beat and meow is timed from it, so the whole song freezes
+const PAUSE_BTN = [[300, 420], [480, 600]]; // Resume, Quit (menu canvas y ranges)
+function pause(on){
+  if (state !== 'play' || paused === on) return;
+  paused = on;
+  if (on) { ctx.suspend(); drawPause(); menu.mesh.visible = true; } else { menu.mesh.visible = false; ctx.resume(); }
+}
+function drawPause(){ menu.redraw((g, W, H) => {
+  box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.92)'); g.textAlign = 'center';
+  g.fillStyle = '#fff'; g.font = 'bold 84px system-ui'; g.fillText('Paused', W/2, 140);
+  g.font = '36px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText(S.song.title, W/2, 210);
+  [['▶ Resume', '#8cff66'], ['Quit to venue', '#ff9db5']].forEach(([t, c], i) => { const [y0, y1] = PAUSE_BTN[i];
+    box(g, 260, y0, W-520, y1-y0, 26, c); g.fillStyle = '#1a0f24'; g.font = 'bold 52px system-ui'; g.fillText(t, W/2, y0 + 78); });
+  g.fillStyle = '#cbb8ff'; g.font = '30px system-ui'; g.fillText('Menu or A/B/X/Y button (P on keyboard) also resumes', W/2, 690);
+}); }
 const songNow = () => ctx.currentTime - lat; // what the player hears right now
 const mult = () => 1 + Math.min(3, Math.floor(S.combo/10));
 function showJudge(text, color){
@@ -390,7 +446,7 @@ function startSong(i){
     if (tail) { tail.visible = false; noteGroup.add(tail); }
     return { ...n, time, end: time + n.secs*0.85, hold, tail, mesh, judged:false }; });
   S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:[null,null,null,null] };
-  state = 'play'; menu.mesh.visible = false; hud.mesh.visible = true; drawHud();
+  state = 'play'; menu.mesh.visible = false; hud.mesh.visible = true; drawHud(); needCalib = 3;
 }
 function clearNotes(){
   S?.holds.forEach(h => h && h.voice.stop(ctx.currentTime));
@@ -398,6 +454,7 @@ function clearNotes(){
   noteGroup.clear();
 }
 function toMenu(){
+  if (paused) { paused = false; ctx.resume(); }
   if (state === 'results' && S.newVenue) applyVenue(Math.floor(S.idx/4) + 1); // walk straight into the new venue
   state = 'menu'; clearNotes(); hud.mesh.visible = false; beatLines.forEach(b => b.visible = false); drawMenu(); menu.mesh.visible = true;
 }
@@ -424,7 +481,9 @@ function scheduleBacking(){
   }
 }
 function miss(n){ n.judged = true; n.mesh.visible = false; if (n.tail) n.tail.visible = false; S.combo = 0; S.miss++; showJudge('MISS', '#ff6b6b'); drawHud(); }
-function press(lane, ctrl){
+// canHold=false: a baton flick without the trigger down plays a hold note as a plain tap
+function press(lane, ctrl, canHold = true){
+  if (paused) return;
   pads[lane].userData.glow = 1;
   if (state === 'menu') { pickSong(lane); return; }
   if (state === 'results') { toMenu(); return; }
@@ -439,10 +498,13 @@ function press(lane, ctrl){
   hit.judged = true; hit.mesh.visible = false;
   S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo); perfect ? S.perfect++ : S.good++;
   S.score += (perfect ? 100 : 50) * mult();
-  const len = hit.hold ? hit.end - now + 0.1 : Math.min(0.55, Math.max(0.22, hit.secs*0.9));
-  const voice = meow(hit.midi + S.shift, ctx.currentTime, len);
-  if (hit.hold) { hit.holding = true; hit.tail.material.opacity = 0.95; S.holds[lane] = { n:hit, voice }; }
+  const hold = hit.hold && canHold;
+  if (hit.hold && !hold) hit.tail.visible = false;
+  const len = hold ? hit.end - now + 0.1 : Math.min(0.55, Math.max(0.22, hit.secs*0.9));
+  const voice = meow(hit.midi + S.shift + PITCH_UP, ctx.currentTime, len);
+  if (hold) { hit.holding = true; hit.tail.material.opacity = 0.95; S.holds[lane] = { n:hit, voice, ctrl }; }
   band[lane].userData.singT = perfNow(); bursts[lane].userData.t = perfNow();
+  for (let k=0; k<10; k++) spark(pads[lane].position, LANES[lane]);
   showJudge(perfect ? 'PERFECT!' : 'GOOD', perfect ? '#ffc94d' : '#8cff66');
   ctrl?.userData.src?.gamepad?.hapticActuators?.[0]?.pulse?.(perfect ? 0.8 : 0.4, 40);
   drawHud();
@@ -462,6 +524,7 @@ const KEYMAP = { KeyD:0, KeyF:1, KeyJ:2, KeyK:3 };
 addEventListener('keydown', e => {
   if (e.repeat) return;
   if (e.code in KEYMAP) { begin(); press(KEYMAP[e.code]); }
+  else if (e.code === 'KeyP' || e.code === 'Space') pause(!paused);
   else if (/^Digit[1-4]$/.test(e.code) && state !== 'play') { begin(); if (state === 'results') toMenu(); pickSong(+e.code.slice(5) - 1); }
   else if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight') && state === 'menu') changeVenue(e.code === 'ArrowLeft' ? -1 : 1);
   else if (e.code === 'Escape') toMenu();
@@ -489,10 +552,11 @@ function aimedLane(c){
   return best;
 }
 function trigger(c){
-  if (state === 'play') { const l = aimedLane(c); if (l >= 0) { c.userData.lane = l; press(l, c); } return; }
+  if (state === 'play' && !paused) { const l = aimedLane(c); if (l >= 0) { c.userData.lane = l; press(l, c); } return; }
   aim(c); const hit = ray.intersectObject(menu.mesh)[0]; if (!hit) return;
-  if (state === 'results') return toMenu();
   const y = (1 - hit.uv.y) * MENU_H, x = hit.uv.x * 1024;
+  if (paused) { if (y >= PAUSE_BTN[0][0] && y <= PAUSE_BTN[0][1]) pause(false); else if (y >= PAUSE_BTN[1][0] && y <= PAUSE_BTN[1][1]) toMenu(); return; }
+  if (state === 'results') return toMenu();
   if (y >= NAV_Y && y <= NAV_Y + 80) { if (x < 360) changeVenue(-1); else if (x > 1024-360) changeVenue(1); return; }
   const card = Math.floor((y - CARD_Y) / CARD_STEP);
   if (card >= 0 && card < 4 && (y - CARD_Y) % CARD_STEP < CARD_H) press(card, c);
@@ -501,26 +565,49 @@ const ctrls = [0, 1].map(i => {
   const c = renderer.xr.getController(i);
   c.addEventListener('connected', e => { c.userData.src = e.data; });
   c.addEventListener('disconnected', () => c.userData.src = null);
-  c.addEventListener('selectstart', () => trigger(c));
-  c.addEventListener('selectend', () => { if (c.userData.lane >= 0) release(c.userData.lane); c.userData.lane = -1; });
+  c.addEventListener('selectstart', () => { c.userData.triggerDown = true; trigger(c); });
+  c.addEventListener('selectend', () => { c.userData.triggerDown = false; if (c.userData.lane >= 0) release(c.userData.lane); c.userData.lane = -1; });
   c.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -6)]),
     new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0.5 })));
   add(new THREE.CylinderGeometry(0.008, 0.012, 0.3).rotateX(Math.PI/2).translate(0, 0, -0.15), lamb(0xf5deb3), 0, 0, 0, c); // conductor baton
-  scene.add(c);
+  c.userData.tip = add(SPH, basic(0xffffff), 0, 0, -0.3, c); c.userData.tip.scale.setScalar(0.015);
+  c.userData.prevTip = new THREE.Vector3(); c.userData.vy = 0; c.userData.flickT = -9; c.userData.lastLane = -1; c.userData.lastLaneT = -9;
+  rig.add(c);
   c.userData.cursor = add(new THREE.RingGeometry(0.06, 0.09, 24).rotateX(-Math.PI/2), basic(0xffffff, { transparent:true, opacity:0.8, side:THREE.DoubleSide }), 0, HY+0.05, HIT_Z);
   return c;
 });
 
 // ---------- loop ----------
-const M = new THREE.Matrix4(), base = new THREE.Matrix4(), V = new THREE.Vector3(), RZ = new THREE.Matrix4();
+const M = new THREE.Matrix4(), base = new THREE.Matrix4(), V = new THREE.Vector3(), RZ = new THREE.Matrix4(), TIP = new THREE.Vector3();
+const FLICK_VY = 1.1;      // m/s upward baton speed that counts as a conducting stroke
+const PAUSE_BUTTONS = [4, 5, 6, 7, 8, 9, 10, 11, 12]; // A/B/X/Y and any extra (e.g. menu) buttons the browser exposes
+let lastTime = perfNow();
+function maestro(c, time, dt){
+  const u = c.userData, gp = u.src?.gamepad; if (!gp) return;
+  const down = PAUSE_BUTTONS.some(i => gp.buttons[i]?.pressed);
+  if (down && !u.btnDown) state === 'play' ? pause(!paused) : null;
+  u.btnDown = down;
+  u.tip.getWorldPosition(TIP);
+  u.vy = 0.6*u.vy + 0.4*(TIP.y - u.prevTip.y)/Math.max(dt, 1e-3); u.prevTip.copy(TIP);
+  if (state !== 'play' || paused) return;
+  const l = aimedLane(c); if (l >= 0) { u.lastLane = l; u.lastLaneT = time; }
+  // point at a lane, then raise the baton sharply = conduct that note
+  if (u.vy > FLICK_VY && time - u.flickT > 0.18 && time - u.lastLaneT < 0.4) { u.flickT = time; press(u.lastLane, c, !!u.triggerDown); }
+}
 function tick(){
-  const time = perfNow();
+  const time = perfNow(), dt = Math.min(0.1, time - lastTime); lastTime = time;
   let beatPos = time*1.5, exc = 0.06;
-  if (state === 'play'){
+  if (renderer.xr.isPresenting && needCalib > 0 && --needCalib === 0) calibrate();
+  ctrls.forEach(c => maestro(c, time, dt));
+  updateSparks(dt);
+  if (state === 'play' && paused) beatPos = beatAt(S.segs, songNow() - S.t0);
+  else if (state === 'play'){
     scheduleBacking();
     const now = songNow(), st = now - S.t0; beatPos = beatAt(S.segs, st); exc = 0.12 + Math.min(S.combo, 40)/40*0.3;
     S.holds.forEach((h, lane) => { if (!h) return;
       band[lane].userData.singT = time; pads[lane].userData.glow = 1; drawTail(h.n, 0, now);
+      const from = h.ctrl ? h.ctrl.userData.tip.getWorldPosition(TIP) : pads[lane].position; // the special effect
+      for (let k=0; k<3; k++) spark(from, LANES[lane]);
       if (now >= h.n.end) finishHold(lane, true); });
     for (const n of S.notes){
       if (n.judged) continue;
@@ -536,7 +623,8 @@ function tick(){
     if (time - hudT > 0.25) { drawHud(); hudT = time; }
     if (st > S.secs + 1.5) endSong();
   }
-  if (time < cheerUntil) exc = 0.45;
+  const holding = state === 'play' && !paused && S.holds.some(Boolean);
+  if (time < cheerUntil || holding) exc = 0.45;
 
   for (let i=0;i<audCount;i++){
     const a = AUD[i], bob = Math.abs(Math.cos(beatPos*Math.PI + a.ph*0.3)) * exc;
@@ -549,7 +637,8 @@ function tick(){
     sticks.setMatrixAt(i, M.multiplyMatrices(base, RZ.makeRotationZ(Math.sin(time*3 + s.ph)*0.6).setPosition(0.24, 0.75, 0.05))); });
   sticks.instanceMatrix.needsUpdate = true;
 
-  beams.forEach((b, i) => { b.rotation.z = Math.sin(time*0.6 + i)*0.45; b.rotation.x = Math.cos(time*0.4 + i*2)*0.3; });
+  const sweep = holding ? 2.5 : 0.6; // light show speeds up and brightens while you hold a note
+  beams.forEach((b, i) => { b.rotation.z = Math.sin(time*sweep + i)*0.45; b.rotation.x = Math.cos(time*sweep*0.7 + i*2)*0.3; b.material.opacity = holding ? 0.25 : 0.1; });
   band.forEach(c => { const u = c.userData, k = Math.max(0, 1 - (time - u.singT)/0.4);
     u.mouth.scale.y = 0.01 + 0.07*k; u.head.rotation.x = -0.25*k;
     c.position.y = u.baseY + Math.abs(Math.cos(beatPos*Math.PI))*0.03 + 0.06*k; u.spot.intensity = 30 + 70*k; });
