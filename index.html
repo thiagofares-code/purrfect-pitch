@@ -13,15 +13,15 @@
 </head>
 <body>
 <div id="start"><h1>🐱 Purrfect Pitch</h1><p>Lead the cat choir. Click to start (sound on).</p></div>
-<div id="help">Desktop: drag to look · <b>D F J K</b> hit lanes · <b>1–4</b> pick song · <b>← →</b> venue · <b>Esc</b> menu<br>
+<div id="help">Desktop: drag to look · <b>D F J K</b> (+<b>L</b> from venue 3) hit lanes · <b>1–4</b> pick song · <b>← →</b> venue · <b>Esc</b> menu<br>
 Quest: Enter VR · aim the baton at a lane and flick it up (or pull the trigger) · hold the trigger on long notes · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt } from './songs.js?v=7';
-const BUILD = 'v7'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor } from './songs.js?v=8';
+const BUILD = 'v8'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -33,10 +33,12 @@ const tierStars = k => [0,1,2,3].reduce((s, i) => s + (best[SONGS[k*4+i].title]?
 const unlocked = k => k === 0 || tierStars(k-1) >= STARS_TO_UNLOCK;
 
 // ---------- constants ----------
-const LANE_HEX = ['#ff5fa2','#ffc94d','#4dd8ff','#8cff66'];
-const LANES = LANE_HEX.map(c => new THREE.Color(c));
-const KEYS = ['D','F','J','K'];
-const LANE_X = [-0.45,-0.15,0.15,0.45];
+// five lane slots; 4-lane songs skip the middle (purple) one, which belongs to the balcony soloist
+const ALL_HEX = ['#ff5fa2','#ffc94d','#b48cff','#4dd8ff','#8cff66'], ALL = ALL_HEX.map(c => new THREE.Color(c));
+const LAYOUTS = { 4:[0,1,3,4], 5:[0,1,2,3,4] }; // lane index -> slot
+const MENU_HEX = LAYOUTS[4].map(g => ALL_HEX[g]);  // song card colours
+const laneXs = n => Array.from({ length:n }, (_, i) => (i - (n-1)/2)*0.3);
+let LAY = LAYOUTS[4], LANES = LAY.map(g => ALL[g]), LANE_HEX = LAY.map(g => ALL_HEX[g]), LANE_X = laneXs(4), KEYS = [...'DFJK'];
 const HY = 0.95, HIT_Z = -0.75, LEN = 13, SPEED = 5.5, LEAD = 3;
 const W_PERFECT = 0.07, W_GOOD = 0.15;
 const HOLD_MIN = 0.7; // seconds: notes at least this long become hold notes
@@ -264,19 +266,21 @@ function makeCat(fur, accent){
 }
 
 // the choir: one singer per lane, on lit risers, turned toward the conductor (you)
-const BAND_POS = [[-2.6,-0.6],[-1.5,-1.4],[1.5,-1.4],[2.6,-0.6]];
-const FURS = [0xe8964a, 0x2a2a30, 0xeeeeee, 0x8a8a96];
-const band = BAND_POS.map(([x, z], i) => {
-  add(new THREE.CylinderGeometry(0.55, 0.6, 0.3, 32), lamb(0x2a1a3a), x, 0.15, z);
-  add(new THREE.TorusGeometry(0.56, 0.02, 8, 48), basic(LANES[i]), x, 0.3, z).rotation.x = Math.PI/2;
-  const cat = makeCat(FURS[i], LANES[i]); cat.scale.setScalar(1.15); cat.position.set(x, 0.3, z); cat.userData.baseY = 0.3;
+// slot 2 is the soloist: a balcony above the score, only out for 5-lane songs
+const BAND_POS = [[-2.6,0,-0.6],[-1.5,0,-1.4],[0,2.4,-4.4],[1.5,0,-1.4],[2.6,0,-0.6]];
+const FURS = [0xe8964a, 0x2a2a30, 0xd9c3a0, 0xeeeeee, 0x8a8a96];
+const allBand = BAND_POS.map(([x, y, z], g) => {
+  const riser = add(new THREE.CylinderGeometry(0.55, 0.6, 0.3, 32), lamb(0x2a1a3a), x, y+0.15, z);
+  const ring = add(new THREE.TorusGeometry(0.56, 0.02, 8, 48), basic(ALL[g]), x, y+0.3, z); ring.rotation.x = Math.PI/2;
+  const cat = makeCat(FURS[g], ALL[g]); cat.scale.setScalar(1.15); cat.position.set(x, y+0.3, z); cat.userData.baseY = y+0.3;
   add(new THREE.CylinderGeometry(0.015, 0.015, 0.8), lamb(0x888888), 0, 0.4, 0.42, cat);
   add(SPH, lamb(0x444444), 0, 0.82, 0.4, cat).scale.setScalar(0.04);
-  cat.lookAt(0, 0.3, 1); scene.add(cat);
-  const spot = new THREE.SpotLight(LANES[i], 30, 0, 0.35, 0.6, 2); spot.position.set(x, 6, z+1); spot.target = cat; scene.add(spot);
-  cat.userData.spot = spot;
+  cat.lookAt(0, y+0.3, 1); scene.add(cat);
+  const spot = new THREE.SpotLight(ALL[g], 30, 0, 0.35, 0.6, 2); spot.position.set(x, y+6, z+1); spot.target = cat; scene.add(spot);
+  cat.userData.spot = spot; cat.userData.extras = [riser, ring, spot];
   return cat;
 });
+let band = LAYOUTS[4].map(g => allBand[g]);
 
 // drummer behind you
 const drummer = makeCat(0x7a5236, '#ffffff'); drummer.position.set(0, 0, 2.6); drummer.rotation.y = Math.PI; drummer.scale.setScalar(1.15); scene.add(drummer);
@@ -336,18 +340,22 @@ function applyVenue(k){
 }
 
 // ---------- note highway ----------
-add(new THREE.PlaneGeometry(1.3, LEN).rotateX(-Math.PI/2), basic(0x1a1030, { transparent:true, opacity:0.85 }), 0, HY, HIT_Z - LEN/2 + 0.3);
-LANE_X.forEach((x, i) => add(new THREE.BoxGeometry(0.01, 0.005, LEN), basic(LANES[i], { transparent:true, opacity:0.35 }), x, HY+0.003, HIT_Z - LEN/2 + 0.3));
-add(new THREE.BoxGeometry(1.3, 0.01, 0.02), basic(0xffffff), 0, HY+0.01, HIT_Z);
-const pads = LANE_X.map((x, i) => { const p = add(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 24), basic(LANES[i].clone()), x, HY+0.015, HIT_Z); p.userData.glow = 0; return p; });
-const bursts = LANE_X.map((x, i) => { const b = add(new THREE.RingGeometry(0.1, 0.14, 32).rotateX(-Math.PI/2), basic(LANES[i], { transparent:true, side:THREE.DoubleSide }), x, HY+0.04, HIT_Z); b.visible = false; b.userData.t = -9; return b; });
+// built for 1.3 m (4 lanes); setLayout() widens it and moves the lane pieces
+const highway = add(new THREE.PlaneGeometry(1.3, LEN).rotateX(-Math.PI/2), basic(0x1a1030, { transparent:true, opacity:0.85 }), 0, HY, HIT_Z - LEN/2 + 0.3);
+const laneLines = ALL.map(c => add(new THREE.BoxGeometry(0.01, 0.005, LEN), basic(c, { transparent:true, opacity:0.35 }), 0, HY+0.003, HIT_Z - LEN/2 + 0.3));
+const hitBar = add(new THREE.BoxGeometry(1.3, 0.01, 0.02), basic(0xffffff), 0, HY+0.01, HIT_Z);
+const allPads = ALL.map(c => { const p = add(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 24), basic(c.clone()), 0, HY+0.015, HIT_Z); p.userData.glow = 0; return p; });
+const allBursts = ALL.map(c => { const b = add(new THREE.RingGeometry(0.1, 0.14, 32).rotateX(-Math.PI/2), basic(c, { transparent:true, side:THREE.DoubleSide }), 0, HY+0.04, HIT_Z); b.visible = false; b.userData.t = -9; return b; });
+let pads = LAYOUTS[4].map(g => allPads[g]), bursts = LAYOUTS[4].map(g => allBursts[g]);
 // sparkles: hit bursts and the maestro's baton trail on hold notes
 const SPARK_N = 200, sparkPos = new Float32Array(SPARK_N*3), sparkCol = new Float32Array(SPARK_N*3),
   sparkBase = new Float32Array(SPARK_N*3), sparkVel = new Float32Array(SPARK_N*3), sparkAge = new Float32Array(SPARK_N).fill(9);
 const SPARK_LIFE = 0.8; let sparkNext = 0;
 const sparkGeo = new THREE.BufferGeometry();
 sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3)); sparkGeo.setAttribute('color', new THREE.BufferAttribute(sparkCol, 3));
-const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ size:0.035, vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+const sparkTex = canvasTex(64, 64, g => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, '#fff'); r.addColorStop(0.35, 'rgba(255,255,255,0.6)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
+const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ size:0.05, map:sparkTex, vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
 sparks.frustumCulled = false; scene.add(sparks);
 function spark(p, color){
   const i = sparkNext++ % SPARK_N, j = i*3;
@@ -370,7 +378,8 @@ const pawTex = canvasTex(128, 128, g => {
   for (const [x, y] of [[36,54],[54,38],[74,38],[92,54]]) { g.beginPath(); g.ellipse(x, y, 9, 11, 0, 0, 7); g.fill(); }
 });
 const noteGeo = new THREE.CircleGeometry(0.12, 28);
-const noteMats = LANES.map(c => basic(c, { map:pawTex, transparent:true }));
+const allNoteMats = ALL.map(c => basic(c, { map:pawTex, transparent:true }));
+let noteMats = LAYOUTS[4].map(g => allNoteMats[g]);
 const noteGroup = new THREE.Group(); scene.add(noteGroup);
 const tailGeo = new THREE.BoxGeometry(0.07, 0.01, 1).translate(0, 0, -0.5); // unit length, scaled per hold note
 function drawTail(n, headD, now){
@@ -378,11 +387,27 @@ function drawTail(n, headD, now){
   n.tail.visible = endD > headD;
   n.tail.position.set(LANE_X[n.lane], HY+0.02, HIT_Z - headD); n.tail.scale.z = Math.max(0.001, endD - headD);
 }
-const labels = add(new THREE.PlaneGeometry(1.3, 0.13), basic(0xffffff, { transparent:true, map: canvasTex(1024, 102, (g, w) => {
-  g.textAlign = 'center'; g.font = 'bold 30px system-ui';
-  LANE_X.forEach((_, i) => { g.fillStyle = LANE_HEX[i]; g.fillText(KEYS[i], w*(i+0.5)/4, 40); });
-  g.fillStyle = '#cbb8ff'; g.fillText('aim + flick baton up · hold trigger on long notes', w/2, 85); }) }), 0, HY+0.01, HIT_Z+0.17);
+const labelTex = canvasTex(1024, 102, () => {});
+const labels = add(new THREE.PlaneGeometry(1.3, 0.13), basic(0xffffff, { transparent:true, map:labelTex }), 0, HY+0.01, HIT_Z+0.17);
 labels.rotation.x = -Math.PI/2 + 0.4;
+function drawLabels(){
+  const g = labelTex.image.getContext('2d'), w = 1024, n = LANES.length; g.clearRect(0, 0, w, 102);
+  g.textAlign = 'center'; g.font = 'bold 30px system-ui';
+  LANE_X.forEach((_, i) => { g.fillStyle = LANE_HEX[i]; g.fillText(KEYS[i], w*(i+0.5)/n, 40); });
+  g.fillStyle = '#cbb8ff'; g.fillText('aim + flick baton up · hold trigger on long notes', w/2, 85); labelTex.needsUpdate = true;
+}
+// switch the highway, pads, notes and singers between 4 and 5 lanes
+function setLayout(n){
+  LAY = LAYOUTS[n]; LANES = LAY.map(g => ALL[g]); LANE_HEX = LAY.map(g => ALL_HEX[g]); LANE_X = laneXs(n); KEYS = [...'DFJKL'.slice(0, n)];
+  const sx = (n*0.3 + 0.1) / 1.3;
+  [highway, hitBar, labels, ...beatLines].forEach(m => m.scale.x = sx);
+  ALL.forEach((_, g) => { const lane = LAY.indexOf(g), on = lane >= 0;
+    laneLines[g].visible = allPads[g].visible = on; allBursts[g].visible = false;
+    if (on) laneLines[g].position.x = allPads[g].position.x = allBursts[g].position.x = LANE_X[lane];
+    allBand[g].visible = on; allBand[g].userData.extras.forEach(o => o.visible = on); });
+  pads = LAY.map(g => allPads[g]); bursts = LAY.map(g => allBursts[g]); noteMats = LAY.map(g => allNoteMats[g]); band = LAY.map(g => allBand[g]);
+  drawLabels();
+}
 
 // ---------- floating panels ----------
 function makePanel(w, h, px=1024){
@@ -404,7 +429,7 @@ function drawMenu(){ const v = TIERS[venue], open = unlocked(venue); menu.redraw
   g.font = '32px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText(`Rank: ${v.rank}  ·  ★ ${tierStars(venue)} / 12`, W/2, 135);
   for (let i=0;i<4;i++){
     const s = SONGS[venue*4+i], y = CARD_Y + i*CARD_STEP, st = best[s.title]?.stars || 0;
-    box(g, 60, y, W-120, CARD_H, 22, open ? LANE_HEX[i] : '#3a2a50');
+    box(g, 60, y, W-120, CARD_H, 22, open ? MENU_HEX[i] : '#3a2a50');
     g.fillStyle = open ? '#1a0f24' : '#8a7aa0'; g.textAlign = 'left';
     g.font = `bold ${s.title.length > 26 ? 34 : 42}px system-ui`; g.fillText(s.title, 95, y+50);
     g.font = '28px system-ui'; g.fillText(s.composer, 95, y+88);
@@ -474,25 +499,26 @@ function showJudge(text, color){
 }
 function startSong(i){
   initAudio(); lat = ctx.outputLatency || ctx.baseLatency || 0;
-  const song = SONGS[i], p = parseSong(song), t0 = ctx.currentTime + LEAD;
-  clearNotes();
+  const song = SONGS[i], p = parseSong(song, lanesFor(i)), t0 = ctx.currentTime + LEAD;
+  clearNotes(); setLayout(lanesFor(i));
   const notes = p.notes.map(n => { const mesh = new THREE.Mesh(noteGeo, noteMats[n.lane]);
     mesh.rotation.x = -Math.PI/2 + 0.35; mesh.visible = false; noteGroup.add(mesh);
     const time = t0 + n.t, hold = n.secs >= HOLD_MIN;
     const tail = hold ? new THREE.Mesh(tailGeo, basic(LANES[n.lane], { transparent:true, opacity:0.55 })) : null;
     if (tail) { tail.visible = false; noteGroup.add(tail); }
     return { ...n, time, end: time + n.secs*0.85, hold, tail, mesh, judged:false }; });
-  S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:[null,null,null,null] };
+  S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:Array(5).fill(null) };
   state = 'play'; menu.mesh.visible = false; hud.mesh.visible = true; drawHud(); needCalib = 3;
 }
 function clearNotes(){
   S?.holds.forEach(h => h && h.voice.stop(ctx.currentTime));
-  if (S) S.holds = [null,null,null,null];
+  if (S) S.holds = Array(5).fill(null);
   noteGroup.clear();
 }
 function toMenu(){
   if (paused) { paused = false; ctx.resume(); }
   if (state === 'results' && S.newVenue) applyVenue(Math.floor(S.idx/4) + 1); // walk straight into the new venue
+  setLayout(4); // the menu has 4 song cards, one per 4-lane pad
   state = 'menu'; clearNotes(); hud.mesh.visible = false; beatLines.forEach(b => b.visible = false); drawMenu(); menu.mesh.visible = true;
 }
 function endSong(){
@@ -520,7 +546,7 @@ function scheduleBacking(){
 function miss(n){ n.judged = true; n.mesh.visible = false; if (n.tail) n.tail.visible = false; S.combo = 0; S.miss++; showJudge('MISS', '#ff6b6b'); drawHud(); }
 // canHold=false: a baton flick without the trigger down plays a hold note as a plain tap
 function press(lane, ctrl, canHold = true){
-  if (paused) return;
+  if (paused || lane >= LANES.length) return; // e.g. L key on a 4-lane song
   pads[lane].userData.glow = 1;
   if (state === 'menu') { pickSong(lane); return; }
   if (state === 'results') { toMenu(); return; }
@@ -557,7 +583,7 @@ function finishHold(lane, ok){
 }
 
 // ---------- input ----------
-const KEYMAP = { KeyD:0, KeyF:1, KeyJ:2, KeyK:3 };
+const KEYMAP = { KeyD:0, KeyF:1, KeyJ:2, KeyK:3, KeyL:4 };
 addEventListener('keydown', e => {
   if (e.repeat) return;
   if (e.code in KEYMAP) { begin(); press(KEYMAP[e.code]); }
@@ -584,7 +610,7 @@ function aim(c){
 function aimedLane(c){
   const r = aim(c); if (r.direction.y >= -0.01) return -1;
   const x = r.origin.x + r.direction.x * (HY - r.origin.y) / r.direction.y;
-  if (Math.abs(x) > 0.9) return -1; // aimed off the highway
+  if (Math.abs(x) > LANE_X[LANE_X.length-1] + 0.45) return -1; // aimed off the highway
   let best = 0; LANE_X.forEach((lx, i) => { if (Math.abs(x - lx) < Math.abs(x - LANE_X[best])) best = i; });
   return best;
 }
@@ -696,6 +722,7 @@ function tick(){
   if (!renderer.xr.isPresenting) camera.rotation.set(pitch, -yaw, 0, 'YXZ');
   renderer.render(scene, camera);
 }
+setLayout(4);
 { let k = 0; while (k+1 < TIERS.length && unlocked(k+1)) k++; applyVenue(k); } // open at the furthest unlocked venue
 drawMenu();
 renderer.setAnimationLoop(tick);

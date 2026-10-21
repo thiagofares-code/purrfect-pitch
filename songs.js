@@ -12,12 +12,13 @@ export const TIERS = [
 ];
 export const STARS_TO_UNLOCK = 8; // of the 12 available in the previous venue
 export const TARGET_SECS = 110;   // the form repeats until the song reaches this length
+export const lanesFor = i => i >= 8 ? 5 : 4; // venue 3 (Jazz Club) onwards adds a fifth lane
 
 const NAMES = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
 export const midi = n => { const m = n.match(/^([A-G])(#?)(-?\d)$/); return 12*(+m[3]+1) + NAMES[m[1]] + (m[2] ? 1 : 0); };
 
 // -> notes with beat, dur (beats), t / secs (seconds from song start), midi, lane; plus tempo segments
-export function parseSong(song){
+export function parseSong(song, lanes = 4){
   const notes = [], segs = []; let beat = 0, t = 0;
   for (let r = 0; t < TARGET_SECS; r++){
     for (const key of song.form){
@@ -32,7 +33,7 @@ export function parseSong(song){
   }
   // lanes ordered low→high pitch so the highway "sounds" like the melody
   const pitches = [...new Set(notes.map(n => n.midi))].sort((a, b) => a - b);
-  for (const n of notes) n.lane = Math.min(3, Math.floor(pitches.indexOf(n.midi)*4/pitches.length));
+  for (const n of notes) n.lane = Math.min(lanes-1, Math.floor(pitches.indexOf(n.midi)*lanes/pitches.length));
   return { notes, length: beat, secs: t, segs };
 }
 const segAt = (segs, key, v) => { let s = segs[0]; for (const x of segs) { if (x[key] > v) break; s = x; } return s; };
