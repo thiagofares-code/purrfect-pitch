@@ -20,8 +20,8 @@ Quest: Enter VR · aim the baton at a lane and flick it up (or pull the trigger)
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor } from './songs.js?v=9';
-const BUILD = 'v9'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor } from './songs.js?v=10';
+const BUILD = 'v10'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -428,7 +428,8 @@ const judge = makePanel(1.0, 0.25, 512); judge.mesh.position.set(0, HY+0.45, -1.
 function drawMenu(){ const v = TIERS[venue], open = unlocked(venue); menu.redraw((g, W, H) => {
   box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.9)');
   g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = 'bold 64px system-ui'; g.fillText(`Venue ${venue+1} · ${v.venue}`, W/2, 80);
-  g.font = '32px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText(`Rank: ${v.rank}  ·  ★ ${tierStars(venue)} / 12`, W/2, 135);
+  g.font = '32px system-ui'; g.fillStyle = '#cbb8ff'; const d = difficultyFor(venue*4);
+  g.fillText(`Rank: ${v.rank}  ·  ${d.lanes} lanes${d.doubles ? d.doubles > 1 ? ' · lots of double notes' : ' · double notes' : ''}  ·  ★ ${tierStars(venue)} / 12`, W/2, 135);
   for (let i=0;i<4;i++){
     const s = SONGS[venue*4+i], y = CARD_Y + i*CARD_STEP, st = best[s.title]?.stars || 0;
     box(g, 60, y, W-120, CARD_H, 22, open ? MENU_HEX[i] : '#3a2a50');
@@ -501,7 +502,7 @@ function showJudge(text, color){
 }
 function startSong(i){
   initAudio(); lat = ctx.outputLatency || ctx.baseLatency || 0;
-  const song = SONGS[i], p = parseSong(song, lanesFor(i)), t0 = ctx.currentTime + LEAD;
+  const song = SONGS[i], p = parseSong(song, difficultyFor(i)), t0 = ctx.currentTime + LEAD;
   clearNotes(); setLayout(lanesFor(i));
   const notes = p.notes.map(n => { const mesh = new THREE.Mesh(noteGeo, noteMats[n.lane]);
     mesh.rotation.x = -Math.PI/2 + 0.35; mesh.visible = false; noteGroup.add(mesh);

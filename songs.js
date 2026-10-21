@@ -12,13 +12,20 @@ export const TIERS = [
 ];
 export const STARS_TO_UNLOCK = 8; // of the 12 available in the previous venue
 export const TARGET_SECS = 110;   // the form repeats until the song reaches this length
-export const lanesFor = i => i >= 8 ? 5 : 4; // venue 3 (Jazz Club) onwards adds a fifth lane
+// difficulty ramp per venue: Alley 4 lanes · Rooftop 4 + double notes · Jazz Club 5 lanes ·
+// Opera House 5 + doubles · Stadium 5 + doubles twice per bar
+const RAMP = [{ lanes:4, doubles:0 }, { lanes:4, doubles:1 }, { lanes:5, doubles:0 }, { lanes:5, doubles:1 }, { lanes:5, doubles:2 }];
+export const difficultyFor = i => RAMP[Math.floor(i/4)];
+export const lanesFor = i => difficultyFor(i).lanes;
+
+// harmony for a double note: a third below that belongs to the song's own scale, else a 4th, 5th or octave
+function harmonyBelow(m, scale){ for (const iv of [3, 4, 5, 7, 12]) if (scale.has((m - iv) % 12)) return m - iv; return m - 12; }
 
 const NAMES = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
 export const midi = n => { const m = n.match(/^([A-G])(#?)(-?\d)$/); return 12*(+m[3]+1) + NAMES[m[1]] + (m[2] ? 1 : 0); };
 
 // -> notes with beat, dur (beats), t / secs (seconds from song start), midi, lane; plus tempo segments
-export function parseSong(song, lanes = 4){
+export function parseSong(song, { lanes = 4, doubles = 0 } = {}){
   const notes = [], segs = []; let beat = 0, t = 0;
   for (let r = 0; t < TARGET_SECS; r++){
     for (const key of song.form){
@@ -31,9 +38,21 @@ export function parseSong(song, lanes = 4){
       }
     }
   }
+  // double notes: on the downbeat (and at mid-bar for level 2) a second cat sings a harmony under the melody
+  if (doubles){
+    const scale = new Set(notes.map(n => n.midi % 12)), spots = doubles > 1 && song.bar >= 4 ? [0, song.bar/2] : [0]; // in 2-beat bars mid-bar would be every beat
+    for (const n of notes.slice()){
+      const inBar = ((n.beat - song.pickup) % song.bar + song.bar) % song.bar;
+      if (n.beat >= song.pickup && spots.some(s => Math.abs(inBar - s) < 1e-6))
+        notes.push({ ...n, midi: harmonyBelow(n.midi, scale), partner: n });
+    }
+    notes.sort((a, b) => a.t - b.t);
+  }
   // lanes ordered low→high pitch so the highway "sounds" like the melody
   const pitches = [...new Set(notes.map(n => n.midi))].sort((a, b) => a - b);
   for (const n of notes) n.lane = Math.min(lanes-1, Math.floor(pitches.indexOf(n.midi)*lanes/pitches.length));
+  for (const n of notes) if (n.partner && n.lane === n.partner.lane) n.lane = n.partner.lane > 0 ? n.partner.lane - 1 : n.partner.lane + 1; // never the same lane
+  for (const n of notes) delete n.partner;
   return { notes, length: beat, secs: t, segs };
 }
 const segAt = (segs, key, v) => { let s = segs[0]; for (const x of segs) { if (x[key] > v) break; s = x; } return s; };
