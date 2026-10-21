@@ -13,40 +13,23 @@
 </head>
 <body>
 <div id="start"><h1>🐱 Purrfect Pitch</h1><p>Lead the cat choir. Click to start (sound on).</p></div>
-<div id="help">Desktop: drag to look · <b>D F J K</b> hit lanes · <b>1 2 3</b> pick song · <b>Esc</b> menu<br>
+<div id="help">Desktop: drag to look · <b>D F J K</b> hit lanes · <b>1–4</b> pick song · <b>← →</b> venue · <b>Esc</b> menu<br>
 Quest: Enter VR · point either controller at a lane (or a song) and pull the trigger</div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-// ---------- songs (public domain melodies) ----------
-const ODE1 = 'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 E4:1.5 D4:0.5 D4:2 ';
-const ODE2 = 'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 D4:1.5 C4:0.5 C4:2 ';
-const ODEB = 'D4 D4 E4 C4 D4 E4:0.5 F4:0.5 E4 C4 D4 E4:0.5 F4:0.5 E4 D4 C4 D4 G3:2 ';
-const ELISE = 'E5 D#5 E5 D#5 E5 B4 D5 C5 A4:2 R C4 E4 A4 B4:2 R E4 G#4 B4 C5:2 R E4 E5 D#5 E5 D#5 E5 B4 D5 C5 A4:2 R C4 E4 A4 B4:2 R E4 C5 B4 A4:4 ';
-const SONGS = [
-  { title:'Twinkle Twinkle', composer:'Mozart variations', level:'Easy', bpm:100, bar:4, hat:1, pickup:0,
-    notes:'C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2 G4 G4 F4 F4 E4 E4 D4:2 G4 G4 F4 F4 E4 E4 D4:2 C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2' },
-  { title:'Ode to Joy', composer:'Beethoven', level:'Medium', bpm:120, bar:4, hat:1, pickup:0, notes: ODE1+ODE2+ODEB+ODE2 },
-  // units are 16th notes here, so bpm counts 16ths per minute
-  { title:'Für Elise', composer:'Beethoven', level:'Hard', bpm:220, bar:6, hat:2, pickup:2, notes: ELISE+ELISE },
-];
-const NAMES = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
-const midi = n => { const m = n.match(/^([A-G])(#?)(-?\d)$/); return 12*(+m[3]+1) + NAMES[m[1]] + (m[2]?1:0); };
+import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt } from './songs.js';
 const hz = m => 440 * 2 ** ((m-69)/12);
-function parseSong(song){
-  let beat = 0; const notes = [];
-  for (const tok of song.notes.trim().split(/\s+/)){
-    const [n, d] = tok.split(':'); const dur = d ? +d : 1;
-    if (n !== 'R') notes.push({ beat, dur, midi: midi(n) });
-    beat += dur;
-  }
-  // lanes ordered low→high pitch so the highway "sounds" like the melody
-  const pitches = [...new Set(notes.map(n => n.midi))].sort((a,b) => a-b);
-  for (const n of notes) n.lane = Math.min(3, Math.floor(pitches.indexOf(n.midi)*4/pitches.length));
-  return { notes, length: beat };
-}
+
+// ---------- career progress (best stars/score per song, kept in this browser) ----------
+const SAVE_KEY = 'purrfect-pitch-career-v1';
+let best = {};
+try { best = JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch {}
+const saveBest = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(best)); } catch {} };
+const tierStars = k => [0,1,2,3].reduce((s, i) => s + (best[SONGS[k*4+i].title]?.stars || 0), 0);
+const unlocked = k => k === 0 || tierStars(k-1) >= STARS_TO_UNLOCK;
 
 // ---------- constants ----------
 const LANE_HEX = ['#ff5fa2','#ffc94d','#4dd8ff','#8cff66'];
@@ -186,10 +169,16 @@ add(new THREE.PlaneGeometry(80, 60).rotateX(-Math.PI/2), lamb(0x14101c), 0, -1.5
 function canvasTex(w, h, draw){ const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
 const curtain = canvasTex(512, 64, (g, w) => { for (let x=0;x<w;x++){ g.fillStyle = `hsl(350,70%,${18+14*(0.5+0.5*Math.sin(x/w*Math.PI*16))}%)`; g.fillRect(x,0,1,64); } });
-add(new THREE.PlaneGeometry(16, 9), new THREE.MeshLambertMaterial({ map:curtain }), 0, 3, 5).rotation.y = Math.PI;
-for (const s of [-1,1]) add(new THREE.PlaneGeometry(10, 9), new THREE.MeshLambertMaterial({ map:curtain }), 7*s, 3, 0).rotation.y = -s*Math.PI/2;
-add(new THREE.PlaneGeometry(6, 1.1), basic(0xffffff, { map: canvasTex(1024, 188, (g, w, h) => {
-  g.fillStyle = '#1a0f24'; g.fillRect(0,0,w,h); g.fillStyle = '#ffc94d'; g.font = 'bold 110px system-ui'; g.textAlign = 'center'; g.fillText('★ PURRFECT PITCH ★', w/2, 135); }) }), 0, 5.4, 4.95).rotation.y = Math.PI;
+const curtainMats = [];
+const curtainMat = () => { const m = new THREE.MeshLambertMaterial({ map:curtain }); curtainMats.push(m); return m; };
+add(new THREE.PlaneGeometry(16, 9), curtainMat(), 0, 3, 5).rotation.y = Math.PI;
+for (const s of [-1,1]) add(new THREE.PlaneGeometry(10, 9), curtainMat(), 7*s, 3, 0).rotation.y = -s*Math.PI/2;
+const signCv = document.createElement('canvas'); signCv.width = 1024; signCv.height = 188;
+const signTex = new THREE.CanvasTexture(signCv); signTex.colorSpace = THREE.SRGBColorSpace;
+add(new THREE.PlaneGeometry(6, 1.1), basic(0xffffff, { map:signTex }), 0, 5.4, 4.95).rotation.y = Math.PI;
+function drawSign(text){ const g = signCv.getContext('2d');
+  g.fillStyle = '#1a0f24'; g.fillRect(0, 0, 1024, 188); g.fillStyle = '#ffc94d'; g.font = 'bold 92px system-ui'; g.textAlign = 'center'; g.fillText(text, 512, 128);
+  signTex.needsUpdate = true; }
 add(new THREE.BoxGeometry(18, 0.25, 0.25), lamb(0x333340), 0, 7, -3);
 
 // light beams sweeping the crowd
@@ -246,13 +235,15 @@ const arms = [-1,1].map(s => { const a = new THREE.Group(); a.position.set(0.24*
   return a; });
 
 // audience: instanced cats on raked tiers with glowing eyes
-const AUD = []; const AUD_FURS = [0xe8964a,0x8a8a96,0x2a2a30,0xeeeeee,0xd9c3a0,0x7a5236,0xc0c0c8];
-for (let r=0; r<12; r++){
+// built for the biggest venue (front rows first); smaller venues just draw fewer cats
+const AUD = [], seatRows = []; const AUD_FURS = [0xe8964a,0x8a8a96,0x2a2a30,0xeeeeee,0xd9c3a0,0x7a5236,0xc0c0c8];
+for (let r=0; r<20; r++){
   const n = 14 + Math.floor(r*1.5), z = -7.5 - r*1.3, y = -1.5 + r*0.28;
-  if (r) add(new THREE.BoxGeometry(n*0.85+1, y+1.5, 1.3), lamb(0x1d1626), 0, (y-1.5)/2, z);
-  for (let i=0;i<n;i++) AUD.push({ x:(i-(n-1)/2)*0.85 + (Math.random()-0.5)*0.2, y, z: z+(Math.random()-0.5)*0.3,
+  if (r) seatRows.push(add(new THREE.BoxGeometry(n*0.85+1, y+1.5, 1.3), lamb(0x1d1626), 0, (y-1.5)/2, z));
+  for (let i=0;i<n;i++) AUD.push({ x:(i-(n-1)/2)*0.85 + (Math.random()-0.5)*0.2, y, z: z+(Math.random()-0.5)*0.3, row: r,
     ph: Math.random()*6.28, s: 0.85+Math.random()*0.3, fur: AUD_FURS[Math.random()*AUD_FURS.length|0] });
 }
+let audCount = AUD.length;
 const mat4 = (x, y, z, rz, sx, sy=sx, sz=sx) => new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),
   new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,rz)), new THREE.Vector3(sx,sy,sz));
 const SPH_LO = new THREE.SphereGeometry(1, 10, 8), EAR = new THREE.ConeGeometry(1, 1, 8);
@@ -270,9 +261,25 @@ const audParts = [
   if (mat === furMat) AUD.forEach((a, i) => mesh.setColorAt(i, new THREE.Color(a.fur)));
   scene.add(mesh); return { mesh, local };
 });
-const STICKS = Array.from({ length:60 }, (_, k) => ({ cat: Math.random()*AUD.length|0, ph: Math.random()*6.28 }));
+const STICKS = Array.from({ length:120 }, () => ({ cat: Math.random()*AUD.length|0, ph: Math.random()*6.28 })).sort((a, b) => a.cat - b.cat);
 const sticks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.015, 0.015, 0.35, 6).translate(0, 0.175, 0), basic(0xffffff), STICKS.length);
 sticks.frustumCulled = false; STICKS.forEach((s, i) => sticks.setColorAt(i, LANES[i%4])); scene.add(sticks);
+
+// ---------- venues ----------
+let venue = 0;
+const BEAM_ORDER = [1, 2, 0, 3]; // centre beams first
+function applyVenue(k){
+  venue = k; const v = TIERS[k];
+  scene.background.setHex(v.bg); scene.fog.color.setHex(v.bg);
+  curtainMats.forEach(m => m.color.setHex(v.curtain));
+  drawSign(`★ ${v.venue.toUpperCase()} ★`);
+  audCount = Math.min(AUD.length, v.crowd);
+  audParts.forEach(p => p.mesh.count = audCount);
+  sticks.count = STICKS.filter(s => s.cat < audCount).length;
+  seatRows.forEach((b, i) => b.visible = i < AUD[audCount-1].row); // seatRows[i] is row i+1
+  beams.forEach((b, i) => b.visible = BEAM_ORDER.indexOf(i) < v.beams);
+  drummer.visible = v.drummer;
+}
 
 // ---------- note highway ----------
 add(new THREE.PlaneGeometry(1.3, LEN).rotateX(-Math.PI/2), basic(0x1a1030, { transparent:true, opacity:0.85 }), 0, HY, HIT_Z - LEN/2 + 0.3);
@@ -310,31 +317,44 @@ function makePanel(w, h, px=1024){
   return { mesh, redraw(fn){ const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height); fn(g, c.width, c.height); tex.needsUpdate = true; } };
 }
 const box = (g, x, y, w, h, r, fill) => { g.beginPath(); g.roundRect(x, y, w, h, r); g.fillStyle = fill; g.fill(); };
-const menu = makePanel(1.8, 1.2); menu.mesh.position.set(0, 1.55, -2.4);
+const menu = makePanel(1.8, 1.4); menu.mesh.position.set(0, 1.7, -2.4);
+const MENU_H = 796, CARD_Y = 190, CARD_STEP = 120, CARD_H = 105, NAV_Y = 690; // menu canvas layout, shared with hit-testing
 const hud = makePanel(1.2, 0.3); hud.mesh.position.set(0, 2.15, -3.2); hud.mesh.visible = false;
 const judge = makePanel(1.0, 0.25, 512); judge.mesh.position.set(0, HY+0.45, -1.6); judge.mesh.material.opacity = 0;
 
-function drawMenu(){ menu.redraw((g, W, H) => {
-  box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.88)');
-  g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = 'bold 84px system-ui'; g.fillText('🐱 Purrfect Pitch', W/2, 110);
-  g.font = '34px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText('Lead the cat choir: hit each paw as it reaches the line', W/2, 165);
-  SONGS.forEach((s, i) => { const y = 210 + i*140; box(g, 60, y, W-120, 120, 24, LANE_HEX[i]);
-    g.fillStyle = '#1a0f24'; g.textAlign = 'left'; g.font = 'bold 48px system-ui'; g.fillText(s.title, 100, y+58);
-    g.font = '30px system-ui'; g.fillText(`${s.composer} · ${s.level}`, 100, y+98);
-    g.textAlign = 'right'; g.font = 'bold 30px system-ui'; g.fillText(`point + trigger  ·  key ${i+1}`, W-100, y+70); });
+function drawMenu(){ const v = TIERS[venue], open = unlocked(venue); menu.redraw((g, W, H) => {
+  box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.9)');
+  g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = 'bold 64px system-ui'; g.fillText(`Venue ${venue+1} · ${v.venue}`, W/2, 80);
+  g.font = '32px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText(`Rank: ${v.rank}  ·  ★ ${tierStars(venue)} / 12`, W/2, 135);
+  for (let i=0;i<4;i++){
+    const s = SONGS[venue*4+i], y = CARD_Y + i*CARD_STEP, st = best[s.title]?.stars || 0;
+    box(g, 60, y, W-120, CARD_H, 22, open ? LANE_HEX[i] : '#3a2a50');
+    g.fillStyle = open ? '#1a0f24' : '#8a7aa0'; g.textAlign = 'left';
+    g.font = `bold ${s.title.length > 26 ? 34 : 42}px system-ui`; g.fillText(s.title, 95, y+50);
+    g.font = '28px system-ui'; g.fillText(s.composer, 95, y+88);
+    g.textAlign = 'right'; g.font = 'bold 40px system-ui'; g.fillText(open ? '★'.repeat(st) + '☆'.repeat(3-st) : '🔒', W-95, y+50);
+    g.font = '26px system-ui'; g.fillText(!open ? '' : best[s.title] ? `best ${best[s.title].score.toLocaleString()}` : `key ${i+1}`, W-95, y+88);
+  }
+  g.textAlign = 'center';
+  if (!open) { g.fillStyle = '#ffc94d'; g.font = 'bold 30px system-ui'; g.fillText(`Earn ${STARS_TO_UNLOCK} ★ at ${TIERS[venue-1].venue} to unlock`, W/2, NAV_Y-14); }
+  g.font = 'bold 34px system-ui';
+  if (venue > 0) { box(g, 60, NAV_Y, 300, 80, 20, '#5a4a80'); g.fillStyle = '#fff'; g.fillText('◀ Prev venue', 210, NAV_Y+52); }
+  if (venue < TIERS.length-1) { box(g, W-360, NAV_Y, 300, 80, 20, '#5a4a80'); g.fillStyle = '#fff'; g.fillText('Next venue ▶', W-210, NAV_Y+52); }
+  g.fillStyle = '#8a7aa0'; g.font = '24px system-ui'; g.fillText('← → keys', W/2, NAV_Y+50);
 }); }
+function changeVenue(d){ const k = venue + d; if (k < 0 || k >= TIERS.length) return; applyVenue(k); drawMenu(); }
+function pickSong(i){ if (unlocked(venue)) startSong(venue*4 + i); }
 function drawHud(){ hud.redraw((g, W, H) => {
   box(g, 0, 0, W, H, 30, 'rgba(20,10,35,0.75)');
   g.fillStyle = '#fff'; g.textAlign = 'left'; g.font = 'bold 38px system-ui'; g.fillText(S.song.title, 30, 52);
   g.font = 'bold 72px system-ui'; g.fillText(S.score.toLocaleString(), 30, 140);
   g.textAlign = 'right'; g.font = 'bold 54px system-ui'; g.fillStyle = S.combo >= 10 ? '#ffc94d' : '#fff'; g.fillText(`${S.combo} combo`, W-30, 85);
   g.font = '36px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText(`x${mult()}`, W-30, 140);
-  const p = Math.min(1, Math.max(0, (songNow()-S.t0) / (S.length*S.spb)));
+  const p = Math.min(1, Math.max(0, (songNow()-S.t0) / S.secs));
   box(g, 30, 200, W-60, 18, 9, '#3a2a50'); if (p > 0.02) box(g, 30, 200, (W-60)*p, 18, 9, '#ff5fa2');
 }); }
 function drawResults(){
-  const total = S.notes.length, acc = (S.perfect + S.good*0.5)/total;
-  const stars = acc >= 0.9 ? 3 : acc >= 0.7 ? 2 : acc >= 0.4 ? 1 : 0;
+  const { acc, stars } = S;
   menu.redraw((g, W, H) => {
     box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.9)'); g.textAlign = 'center';
     g.fillStyle = '#ffc94d'; g.font = 'bold 84px system-ui'; g.fillText(['Hiss... try again','Nice meowing!','Great show!','PURRFECT!'][stars], W/2, 120);
@@ -343,7 +363,10 @@ function drawResults(){
     g.font = '38px system-ui'; g.fillStyle = '#cbb8ff';
     g.fillText(`${Math.round(acc*100)}% accuracy · max combo ${S.maxCombo}`, W/2, 410);
     g.fillText(`${S.perfect} perfect · ${S.good} good · ${S.miss} miss`, W/2, 465);
-    g.fillStyle = '#fff'; g.font = 'bold 36px system-ui'; g.fillText('Pull a trigger (or press D) to continue', W/2, 590);
+    g.fillStyle = '#8cff66'; g.font = 'bold 44px system-ui';
+    if (S.newVenue) g.fillText(`New venue unlocked: ${TIERS[Math.floor(S.idx/4)+1].venue}!`, W/2, 570);
+    else if (S.newBest) g.fillText('New best score!', W/2, 570);
+    g.fillStyle = '#fff'; g.font = 'bold 36px system-ui'; g.fillText('Pull a trigger (or press D) to continue', W/2, 700);
   });
 }
 
@@ -358,15 +381,15 @@ function showJudge(text, color){
 }
 function startSong(i){
   initAudio(); lat = ctx.outputLatency || ctx.baseLatency || 0;
-  const song = SONGS[i], p = parseSong(song), spb = 60/song.bpm, t0 = ctx.currentTime + LEAD;
+  const song = SONGS[i], p = parseSong(song), t0 = ctx.currentTime + LEAD;
   clearNotes();
   const notes = p.notes.map(n => { const mesh = new THREE.Mesh(noteGeo, noteMats[n.lane]);
     mesh.rotation.x = -Math.PI/2 + 0.35; mesh.visible = false; noteGroup.add(mesh);
-    const time = t0 + n.beat*spb, hold = n.dur*spb >= HOLD_MIN;
+    const time = t0 + n.t, hold = n.secs >= HOLD_MIN;
     const tail = hold ? new THREE.Mesh(tailGeo, basic(LANES[n.lane], { transparent:true, opacity:0.55 })) : null;
     if (tail) { tail.visible = false; noteGroup.add(tail); }
-    return { ...n, time, end: time + n.dur*spb*0.85, hold, tail, mesh, judged:false }; });
-  S = { song, notes, length:p.length, spb, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:[null,null,null,null] };
+    return { ...n, time, end: time + n.secs*0.85, hold, tail, mesh, judged:false }; });
+  S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:[null,null,null,null] };
   state = 'play'; menu.mesh.visible = false; hud.mesh.visible = true; drawHud();
 }
 function clearNotes(){
@@ -374,16 +397,27 @@ function clearNotes(){
   if (S) S.holds = [null,null,null,null];
   noteGroup.clear();
 }
-function toMenu(){ state = 'menu'; clearNotes(); hud.mesh.visible = false; beatLines.forEach(b => b.visible = false); drawMenu(); menu.mesh.visible = true; }
-function endSong(){ state = 'results'; clearNotes(); applause(); cheerUntil = perfNow() + 3; drawResults(); menu.mesh.visible = true; }
+function toMenu(){
+  if (state === 'results' && S.newVenue) applyVenue(Math.floor(S.idx/4) + 1); // walk straight into the new venue
+  state = 'menu'; clearNotes(); hud.mesh.visible = false; beatLines.forEach(b => b.visible = false); drawMenu(); menu.mesh.visible = true;
+}
+function endSong(){
+  S.acc = (S.perfect + S.good*0.5) / S.notes.length;
+  S.stars = S.acc >= 0.9 ? 3 : S.acc >= 0.7 ? 2 : S.acc >= 0.4 ? 1 : 0;
+  const k = Math.floor(S.idx/4), wasOpen = unlocked(k+1), prev = best[S.song.title];
+  best[S.song.title] = { stars: Math.max(S.stars, prev?.stars || 0), score: Math.max(S.score, prev?.score || 0) }; saveBest();
+  S.newVenue = k+1 < TIERS.length && !wasOpen && unlocked(k+1);
+  S.newBest = !prev || S.score > prev.score;
+  state = 'results'; clearNotes(); applause(); cheerUntil = perfNow() + 3; drawResults(); menu.mesh.visible = true;
+}
 function melodyAt(beat){ let m = S.notes[0].midi; for (const n of S.notes) { if (n.beat > beat) break; m = n.midi; } return m; }
 function scheduleBacking(){
-  const { song, spb } = S;
+  const { song } = S;
   while (S.nextHat <= S.length){
-    const b = S.nextHat, t = S.t0 + b*spb;
+    const b = S.nextHat, t = S.t0 + timeAt(S.segs, b);
     if (t > ctx.currentTime + 0.2) break;
     const inBar = Math.round(((b - song.pickup) % song.bar + song.bar) % song.bar);
-    if (b >= song.pickup && inBar === 0) { kick(t); bass(t, 36 + melodyAt(b) % 12, song.bar*spb*0.9); }
+    if (b >= song.pickup && inBar === 0) { kick(t); bass(t, 36 + melodyAt(b) % 12, song.bar*spbAt(S.segs, b)*0.9); }
     else if (song.bar === 4 && inBar === 2) kick(t);
     else hat(t);
     S.nextHat += song.hat;
@@ -392,22 +426,22 @@ function scheduleBacking(){
 function miss(n){ n.judged = true; n.mesh.visible = false; if (n.tail) n.tail.visible = false; S.combo = 0; S.miss++; showJudge('MISS', '#ff6b6b'); drawHud(); }
 function press(lane, ctrl){
   pads[lane].userData.glow = 1;
-  if (state === 'menu') { if (lane < 3) startSong(lane); return; }
+  if (state === 'menu') { pickSong(lane); return; }
   if (state === 'results') { toMenu(); return; }
-  const now = songNow(); let best = null, bd = 1;
+  const now = songNow(); let hit = null, bd = 1;
   for (const n of S.notes){
     if (n.time - now > W_GOOD) break;
     if (n.judged || n.lane !== lane) continue;
-    const d = Math.abs(n.time - now); if (d < bd) { bd = d; best = n; }
+    const d = Math.abs(n.time - now); if (d < bd) { bd = d; hit = n; }
   }
-  if (!best || bd > W_GOOD) return; // stray press: no penalty
+  if (!hit || bd > W_GOOD) return; // stray press: no penalty
   const perfect = bd <= W_PERFECT;
-  best.judged = true; best.mesh.visible = false;
+  hit.judged = true; hit.mesh.visible = false;
   S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo); perfect ? S.perfect++ : S.good++;
   S.score += (perfect ? 100 : 50) * mult();
-  const len = best.hold ? best.end - now + 0.1 : Math.min(0.55, Math.max(0.22, best.dur*S.spb*0.9));
-  const voice = meow(best.midi + S.shift, ctx.currentTime, len);
-  if (best.hold) { best.holding = true; best.tail.material.opacity = 0.95; S.holds[lane] = { n:best, voice }; }
+  const len = hit.hold ? hit.end - now + 0.1 : Math.min(0.55, Math.max(0.22, hit.secs*0.9));
+  const voice = meow(hit.midi + S.shift, ctx.currentTime, len);
+  if (hit.hold) { hit.holding = true; hit.tail.material.opacity = 0.95; S.holds[lane] = { n:hit, voice }; }
   band[lane].userData.singT = perfNow(); bursts[lane].userData.t = perfNow();
   showJudge(perfect ? 'PERFECT!' : 'GOOD', perfect ? '#ffc94d' : '#8cff66');
   ctrl?.userData.src?.gamepad?.hapticActuators?.[0]?.pulse?.(perfect ? 0.8 : 0.4, 40);
@@ -428,7 +462,8 @@ const KEYMAP = { KeyD:0, KeyF:1, KeyJ:2, KeyK:3 };
 addEventListener('keydown', e => {
   if (e.repeat) return;
   if (e.code in KEYMAP) { begin(); press(KEYMAP[e.code]); }
-  else if (/^Digit[123]$/.test(e.code) && state !== 'play') { begin(); startSong(+e.code.slice(5) - 1); }
+  else if (/^Digit[1-4]$/.test(e.code) && state !== 'play') { begin(); if (state === 'results') toMenu(); pickSong(+e.code.slice(5) - 1); }
+  else if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight') && state === 'menu') changeVenue(e.code === 'ArrowLeft' ? -1 : 1);
   else if (e.code === 'Escape') toMenu();
 });
 addEventListener('keyup', e => { if (e.code in KEYMAP) release(KEYMAP[e.code]); });
@@ -457,8 +492,10 @@ function trigger(c){
   if (state === 'play') { const l = aimedLane(c); if (l >= 0) { c.userData.lane = l; press(l, c); } return; }
   aim(c); const hit = ray.intersectObject(menu.mesh)[0]; if (!hit) return;
   if (state === 'results') return toMenu();
-  const y = (1 - hit.uv.y) * 683, card = Math.floor((y - 210) / 140); // matches drawMenu layout
-  if (card >= 0 && card < 3 && (y - 210) % 140 < 120) press(card, c);
+  const y = (1 - hit.uv.y) * MENU_H, x = hit.uv.x * 1024;
+  if (y >= NAV_Y && y <= NAV_Y + 80) { if (x < 360) changeVenue(-1); else if (x > 1024-360) changeVenue(1); return; }
+  const card = Math.floor((y - CARD_Y) / CARD_STEP);
+  if (card >= 0 && card < 4 && (y - CARD_Y) % CARD_STEP < CARD_H) press(card, c);
 }
 const ctrls = [0, 1].map(i => {
   const c = renderer.xr.getController(i);
@@ -481,7 +518,7 @@ function tick(){
   let beatPos = time*1.5, exc = 0.06;
   if (state === 'play'){
     scheduleBacking();
-    const now = songNow(); beatPos = (now - S.t0)/S.spb; exc = 0.12 + Math.min(S.combo, 40)/40*0.3;
+    const now = songNow(), st = now - S.t0; beatPos = beatAt(S.segs, st); exc = 0.12 + Math.min(S.combo, 40)/40*0.3;
     S.holds.forEach((h, lane) => { if (!h) return;
       band[lane].userData.singT = time; pads[lane].userData.glow = 1; drawTail(h.n, 0, now);
       if (now >= h.n.end) finishHold(lane, true); });
@@ -494,20 +531,20 @@ function tick(){
       if (n.tail) drawTail(n, d, now);
     }
     const h = S.song.hat, first = Math.ceil(beatPos/h)*h;
-    beatLines.forEach((bl, k) => { const b = first + k*h, d = (b - beatPos)*S.spb*SPEED;
+    beatLines.forEach((bl, k) => { const b = first + k*h, d = (timeAt(S.segs, b) - st)*SPEED;
       bl.visible = d < LEN && b >= 0 && b <= S.length; bl.position.z = HIT_Z - d; });
     if (time - hudT > 0.25) { drawHud(); hudT = time; }
-    if (now > S.t0 + S.length*S.spb + 1.5) endSong();
+    if (st > S.secs + 1.5) endSong();
   }
   if (time < cheerUntil) exc = 0.45;
 
-  for (let i=0;i<AUD.length;i++){
+  for (let i=0;i<audCount;i++){
     const a = AUD[i], bob = Math.abs(Math.cos(beatPos*Math.PI + a.ph*0.3)) * exc;
     base.makeRotationY(Math.sin(time*0.7 + a.ph)*0.25).scale(V.setScalar(a.s)).setPosition(a.x, a.y + bob, a.z);
     for (const p of audParts) p.mesh.setMatrixAt(i, M.multiplyMatrices(base, p.local));
   }
   audParts.forEach(p => p.mesh.instanceMatrix.needsUpdate = true);
-  STICKS.forEach((s, i) => { const a = AUD[s.cat], bob = Math.abs(Math.cos(beatPos*Math.PI + a.ph*0.3)) * exc;
+  STICKS.forEach((s, i) => { if (i >= sticks.count) return; const a = AUD[s.cat], bob = Math.abs(Math.cos(beatPos*Math.PI + a.ph*0.3)) * exc;
     base.makeRotationY(Math.sin(time*0.7 + a.ph)*0.25).scale(V.setScalar(a.s)).setPosition(a.x, a.y + bob, a.z);
     sticks.setMatrixAt(i, M.multiplyMatrices(base, RZ.makeRotationZ(Math.sin(time*3 + s.ph)*0.6).setPosition(0.24, 0.75, 0.05))); });
   sticks.instanceMatrix.needsUpdate = true;
@@ -526,14 +563,12 @@ function tick(){
   if (!renderer.xr.isPresenting) camera.rotation.set(pitch, -yaw, 0, 'YXZ');
   renderer.render(scene, camera);
 }
+{ let k = 0; while (k+1 < TIERS.length && unlocked(k+1)) k++; applyVenue(k); } // open at the furthest unlocked venue
 drawMenu();
 renderer.setAnimationLoop(tick);
 
-// self-check: note parsing and lane mapping
-console.assert(midi('A4') === 69 && midi('D#5') === 75, 'midi parse');
-console.assert(SONGS.map(s => parseSong(s).length).join() === '48,64,96', 'song lengths');
-console.assert(SONGS.every(s => parseSong(s).notes.some(n => n.dur*60/s.bpm >= HOLD_MIN)), 'every song has hold notes');
-{ const n = parseSong(SONGS[0]).notes; console.assert(n[0].lane === 0 && n.find(x => x.midi === 69).lane === 3, 'twinkle lanes'); }
+// self-check (full song checks live in the offline song validator)
+console.assert(SONGS.length === TIERS.length*4, 'four songs per venue');
 </script>
 </body>
 </html>
