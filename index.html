@@ -22,7 +22,8 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor } from './songs.js?v=11';
 import { buildVenues } from './venues.js?v=11';
-const BUILD = 'v11'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+import { makePaw } from './paw.js?v=12';
+const BUILD = 'v12'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -654,6 +655,7 @@ function press(lane, ctrl, canHold = true){
   for (let k=0; k<10; k++) spark(pads[lane].position, LANES[lane]);
   showJudge(perfect ? 'PURRFECT!' : 'GOOD', perfect ? '#ffc94d' : '#8cff66');
   ctrl?.userData.src?.gamepad?.hapticActuators?.[0]?.pulse?.(perfect ? 0.8 : 0.4, 40);
+  if (ctrl) { ctrl.userData.beanT = perfNow(); ctrl.userData.beanColor.copy(LANES[lane]); } // toe beans flash the lane colour
   drawHud();
 }
 // hold notes: keep the button down until the tail ends; letting go early cuts the meow and the sustain points
@@ -718,10 +720,8 @@ const ctrls = [0, 1].map(i => {
     new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0.5 })));
   add(new THREE.CylinderGeometry(0.008, 0.012, 0.3).rotateX(Math.PI/2).translate(0, 0, -0.15), lamb(0xf5deb3), 0, 0, 0, c); // conductor baton
   c.userData.tip = add(SPH, basic(0xffffff), 0, 0, -0.3, c); c.userData.tip.scale.setScalar(0.015);
-  // a white conductor's glove holding the baton
-  add(SPH, WHITE, 0, -0.012, 0.03, c).scale.set(0.042, 0.03, 0.06);
-  for (let f=0; f<4; f++) add(new THREE.CapsuleGeometry(0.009, 0.03, 4, 8), WHITE, -0.018 + f*0.012, 0.012, -0.004 - f*0.002, c).rotation.x = Math.PI/2 - 0.5;
-  add(new THREE.CylinderGeometry(0.03, 0.036, 0.04, 12).rotateX(Math.PI/2), WHITE, 0, -0.01, 0.1, c); // cuff
+  const paw = makePaw(THREE); c.add(paw); // white-gloved cat paw holding the baton
+  c.userData.beans = paw.userData.beans; c.userData.beanT = -9; c.userData.beanColor = new THREE.Color();
   c.userData.prevTip = new THREE.Vector3(); c.userData.vy = 0; c.userData.flickT = -9; c.userData.lastLane = -1; c.userData.lastLaneT = -9;
   rig.add(c);
   c.userData.cursor = add(new THREE.RingGeometry(0.06, 0.09, 24).rotateX(-Math.PI/2), basic(0xffffff, { transparent:true, opacity:0.8, side:THREE.DoubleSide }), 0, HY+0.05, HIT_Z);
@@ -756,7 +756,8 @@ function tick(){
   const time = perfNow(), dt = Math.min(0.1, time - lastTime); lastTime = time;
   let beatPos = time*1.5, exc = 0.06;
   if (renderer.xr.isPresenting && needCalib > 0 && --needCalib === 0) calibrate();
-  ctrls.forEach(c => maestro(c, time, dt));
+  ctrls.forEach(c => { maestro(c, time, dt);
+    c.userData.beans.emissive.copy(c.userData.beanColor).multiplyScalar(0.9*Math.max(0, 1 - (time - c.userData.beanT)/0.4)); });
   updateSparks(dt); VENUES[venue].update(time, dt);
   if (state === 'play' && paused) beatPos = beatAt(S.segs, songNow() - S.t0);
   else if (state === 'play'){
