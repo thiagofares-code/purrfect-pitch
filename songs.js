@@ -9,7 +9,7 @@ export const TIERS = [
   { venue:'The Rooftop',     rank:'House Cat', bg:0x160d2a, curtain:0x9977bb, beams:2, drummer:true },
   { venue:'The Jazz Club',   rank:'Street Cat',bg:0x1c100a, curtain:0xcc8855, beams:0, drummer:true }, // low ceiling: no beams
   { venue:'The Opera House', rank:'Show Cat',  bg:0x1a0508, curtain:0xffffff, beams:4, drummer:true },
-  { venue:'The Stadium',     rank:'Superstar', bg:0x050814, curtain:0x5566bb, beams:4, drummer:true },
+  { venue:'The Stadium',     rank:'Superstar', bg:0x050814, curtain:0x5566bb, beams:2, drummer:true },
 ];
 export const STARS_TO_UNLOCK = 8; // of the 12 available in the previous venue
 export const TARGET_SECS = 110;   // the form repeats until the song reaches this length

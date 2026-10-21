@@ -14,17 +14,17 @@
 <body>
 <div id="start"><h1>🐱 Purrfect Pitch</h1><p>Lead the cat choir. Click to start (sound on).</p></div>
 <div id="help">Desktop: drag to look · <b>D F J K</b> (+<b>L</b> from venue 3) hit lanes · <b>1–4</b> pick song · <b>← →</b> venue · <b>Esc</b> menu<br>
-Quest: Enter VR · hold the trigger and trace the melody with the baton (or tap / flick single notes) · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
+Quest: Enter VR · raise the baton, hold the trigger and trace the melody (lower it to cross lanes) · <b>H</b> how to play · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor, chordAt } from './songs.js?v=13';
-import { buildVenues } from './venues.js?v=11';
+import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor, chordAt } from './songs.js?v=14';
+import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v18'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v19'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -341,7 +341,7 @@ let screenFrame = 0;
 function updateScreens(){
   camera.getWorldPosition(TIP); const yaw = new THREE.Euler().setFromQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
   avatar.position.set(TIP.x, 0, TIP.z); avatar.rotation.y = yaw + Math.PI; avatar.scale.setScalar(Math.max(0.8, TIP.y/0.95));
-  if (venue !== 4 || screenFrame++ % 3) return; // shortcut: the feed refreshes every 3rd frame to save GPU; every frame if the Quest has headroom
+  if (venue !== 4 || screenFrame++ % 8) return; // the feed redraws the whole scene: every 8th frame keeps the Quest smooth (it measured as the Stadium's biggest extra cost)
   const prev = renderer.getRenderTarget(), xr = renderer.xr.enabled;
   renderer.xr.enabled = false; renderer.setRenderTarget(screenRT); renderer.render(scene, screenCam);
   renderer.setRenderTarget(prev); renderer.xr.enabled = xr;
@@ -462,7 +462,7 @@ function drawLabels(){
   const g = labelTex.image.getContext('2d'), w = 1024, n = LANES.length; g.clearRect(0, 0, w, 102);
   g.textAlign = 'center'; g.font = 'bold 30px system-ui';
   LANE_X.forEach((_, i) => { g.fillStyle = LANE_HEX[i]; g.fillText(KEYS[i], w*(i+0.5)/n, 40); });
-  g.fillStyle = '#cbb8ff'; g.fillText('hold trigger + trace the melody with your baton', w/2, 85); labelTex.needsUpdate = true;
+  g.fillStyle = '#cbb8ff'; g.fillText('raise the baton, hold the trigger, trace the melody', w/2, 85); labelTex.needsUpdate = true;
 }
 // switch the highway, pads, notes and singers between 4 and 5 lanes
 function setLayout(n){
@@ -510,8 +510,38 @@ function drawMenu(){ const v = TIERS[venue], open = unlocked(venue); menu.redraw
   g.font = 'bold 34px system-ui';
   if (venue > 0) { box(g, 60, NAV_Y, 300, 80, 20, '#5a4a80'); g.fillStyle = '#fff'; g.fillText('◀ Prev venue', 210, NAV_Y+52); }
   if (venue < TIERS.length-1) { box(g, W-360, NAV_Y, 300, 80, 20, '#5a4a80'); g.fillStyle = '#fff'; g.fillText('Next venue ▶', W-210, NAV_Y+52); }
-  g.fillStyle = '#8a7aa0'; g.font = '24px system-ui'; g.fillText('← → keys', W/2, NAV_Y+42); g.fillText(BUILD, W/2, NAV_Y+74);
+  box(g, 380, NAV_Y, W-760, 56, 18, '#3a2f55'); g.fillStyle = '#fff'; g.font = 'bold 28px system-ui'; g.fillText('How to play (H)', W/2, NAV_Y+38);
+  g.fillStyle = '#8a7aa0'; g.font = '22px system-ui'; g.fillText(`← → keys · ${BUILD}`, W/2, NAV_Y+82);
 }); }
+// ---------- tutorial: the first thing a new player sees; replay it from the menu (How to play, or H) ----------
+const TUT_KEY = 'purrfect-pitch-tutorial-v1';
+const TUT = [
+  ['Raise your baton', ['Lift your hand above your chest.', 'The baton tip grows while it is raised:', 'only a raised baton conducts.']],
+  ['Point and hold', ['Aim at a lane on the note highway', 'and hold the trigger (the back button).']],
+  ['Conduct the cats!', ['A note is sung when it reaches the line', 'in the lane you point at. Lower the baton', 'to cross lanes without singing.', 'Long notes: keep it up on the lane', 'until the tail ends.']],
+];
+let tutStep = 0, tutT = 0;
+function startTutorial(){ state = 'tutorial'; tutStep = 0; tutT = perfNow(); drawTutorial(); menu.mesh.visible = true; }
+function drawTutorial(){ const [title, lines] = TUT[tutStep], last = tutStep === TUT.length - 1; menu.redraw((g, W, H) => {
+  box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.9)'); g.textAlign = 'center';
+  g.fillStyle = '#cbb8ff'; g.font = '30px system-ui'; g.fillText(`How to play · step ${tutStep + 1} of ${TUT.length}`, W/2, 70);
+  g.fillStyle = '#ffc94d'; g.font = 'bold 72px system-ui'; g.fillText(title, W/2, 170);
+  g.fillStyle = '#fff'; g.font = '40px system-ui'; lines.forEach((l, i) => g.fillText(l, W/2, 270 + i*60));
+  g.fillStyle = '#8cff66'; g.font = 'bold 36px system-ui';
+  g.fillText(last ? 'Pull the trigger (or press D) to play your first song' : renderer.xr.isPresenting ? 'Do it to continue' : 'Press D to continue', W/2, 700);
+}); }
+function tutNext(){
+  tutT = perfNow(); if (++tutStep < TUT.length) return drawTutorial();
+  try { localStorage.setItem(TUT_KEY, '1'); } catch {}
+  applyVenue(0); startSong(0);
+}
+// in VR, steps 1 and 2 advance by doing them (after a moment, so a hand already up doesn't skip the step)
+function checkTutorial(time){
+  if (state !== 'tutorial' || !renderer.xr.isPresenting || time - tutT < 1) return;
+  const ok = tutStep === 0 ? ctrls.some(c => c.userData.src && raised(c))
+    : tutStep === 1 && ctrls.some(c => c.userData.src && c.userData.triggerDown && raised(c) && aimedLane(c) >= 0);
+  if (ok) tutNext();
+}
 function changeVenue(d){ const k = venue + d; if (k < 0 || k >= TIERS.length) return; applyVenue(k); drawMenu(); }
 function pickSong(i){ if (unlocked(venue)) startSong(venue*4 + i); }
 function drawHud(){ hud.redraw((g, W, H) => {
@@ -522,11 +552,19 @@ function drawHud(){ hud.redraw((g, W, H) => {
   g.font = '36px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText(`x${mult()}`, W-30, 140);
   const p = Math.min(1, Math.max(0, (songNow()-S.t0) / S.secs));
   box(g, 30, 200, W-60, 18, 9, '#3a2a50'); if (p > 0.02) box(g, 30, 200, (W-60)*p, 18, 9, '#ff5fa2');
-  if (renderer.xr.isPresenting) { g.textAlign = 'left'; g.font = '24px system-ui'; g.fillStyle = '#cbb8ff';
-    g.fillText(`baton flick ${batonPeak.toFixed(1)} m/s (counts above ${FLICK_VY})`, 30, 246); batonPeak *= 0.5; }
+  const m = Math.max(0, S.meter); g.textAlign = 'left'; g.font = 'bold 22px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText('CROWD', 30, 248);
+  box(g, 130, 232, W-160, 18, 9, '#3a2a50'); if (m > 0.02) box(g, 130, 232, (W-160)*m, 18, 9, m < 0.25 ? '#ff4d4d' : m < 0.5 ? '#ffc94d' : '#8cff66');
 }); }
 function drawResults(){
   const { acc, stars } = S;
+  if (S.failed) return menu.redraw((g, W, H) => {
+    box(g, 0, 0, W, H, 40, 'rgba(35,8,12,0.92)'); g.textAlign = 'center';
+    g.fillStyle = '#ff4d4d'; g.font = 'bold 120px system-ui'; g.fillText('BOOOO!', W/2, 170);
+    g.fillStyle = '#fff'; g.font = 'bold 44px system-ui'; g.fillText('The crowd lost patience', W/2, 260);
+    g.font = '36px system-ui'; g.fillStyle = '#ffb3b3'; g.fillText(`${S.song.title}: ${Math.round((songNow() - S.t0)/S.secs*100)}% through · max combo ${S.maxCombo}`, W/2, 340);
+    g.fillText('Missed notes drain the crowd meter. Sing to fill it.', W/2, 410);
+    g.fillStyle = '#fff'; g.font = 'bold 36px system-ui'; g.fillText('Pull a trigger (or press D) to continue', W/2, 700);
+  });
   menu.redraw((g, W, H) => {
     box(g, 0, 0, W, H, 40, 'rgba(20,10,35,0.9)'); g.textAlign = 'center';
     g.fillStyle = '#ffc94d'; g.font = 'bold 84px system-ui'; g.fillText(['Hiss... try again','Nice meowing!','Great show!','PURRFECT SHOW!'][stars], W/2, 120);
@@ -576,7 +614,7 @@ function startSong(i){
     const tail = hold ? new THREE.Mesh(tailGeo, basic(LANES[n.lane], { transparent:true, opacity:0.55 })) : null;
     if (tail) { tail.visible = false; noteGroup.add(tail); }
     return { ...n, time, end: time + n.secs*0.85, hold, tail, mesh, judged:false }; });
-  S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, chords:p.chords, segIdx:1, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, holds:Array(5).fill(null) };
+  S = { idx:i, song, notes, length:p.length, secs:p.secs, segs:p.segs, chords:p.chords, segIdx:1, t0, shift: bestShift(p.notes), nextHat:0, score:0, combo:0, maxCombo:0, perfect:0, good:0, miss:0, meter:METER_START, holds:Array(5).fill(null) };
   state = 'play'; menu.mesh.visible = false; hud.mesh.visible = true; drawHud(); needCalib = 3;
 }
 function clearNotes(){
@@ -612,11 +650,19 @@ function scheduleBacking(){
     S.nextHat += song.hat;
   }
 }
-function miss(n){ lastMissT = perfNow(); n.judged = true; n.mesh.visible = false; if (n.tail) n.tail.visible = false; S.combo = 0; S.miss++; showJudge('MISS', '#ff6b6b'); drawHud(); }
+const MISS_MAT = basic(0xff2a2a, { map:pawTex, transparent:true });
+// crowd meter (0-1): hits fill it, misses drain it (gentler in the early venues); empty and the crowd boos you off
+const METER_START = 0.6, METER_HIT = 0.025, meterDrain = () => 0.04 + 0.01*venue;
+function miss(n){ lastMissT = perfNow(); n.judged = n.missed = true; n.mesh.material = MISS_MAT; if (n.tail) n.tail.visible = false;
+  S.combo = 0; S.miss++; S.meter -= meterDrain(); showJudge('MISS', '#ff6b6b'); drawHud(); if (S.meter <= 0) failSong(); }
+function failSong(){
+  S.failed = true; S.stars = 0; state = 'results'; clearNotes(); cheerUntil = 0; showJudge('BOOOO!', '#ff4d4d'); drawResults(); menu.mesh.visible = true;
+}
 // canHold=false: a baton flick without the trigger down plays a hold note as a plain tap
 function press(lane, ctrl, canHold = true){
   if (paused || lane >= LANES.length) return; // e.g. L key on a 4-lane song
   pads[lane].userData.glow = 1;
+  if (state === 'tutorial') { tutNext(); return; }
   if (state === 'menu') { pickSong(lane); return; }
   if (state === 'results') { toMenu(); return; }
   const now = songNow(); let hit = null, bd = 1;
@@ -632,7 +678,7 @@ function press(lane, ctrl, canHold = true){
 function sing(hit, bd, lane, ctrl, canHold){
   const now = songNow(), perfect = bd <= W_PERFECT;
   hit.judged = true; hit.mesh.visible = false;
-  S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo); perfect ? S.perfect++ : S.good++;
+  S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo); perfect ? S.perfect++ : S.good++; S.meter = Math.min(1, S.meter + METER_HIT);
   S.score += (perfect ? 100 : 50) * mult();
   const hold = hit.hold && canHold;
   if (hit.hold && !hold) hit.tail.visible = false;
@@ -666,6 +712,7 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyP' || e.code === 'Space') pause(!paused);
   else if (/^Digit[1-4]$/.test(e.code) && state !== 'play') { begin(); if (state === 'results') toMenu(); pickSong(+e.code.slice(5) - 1); }
   else if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight') && state === 'menu') changeVenue(e.code === 'ArrowLeft' ? -1 : 1);
+  else if (e.code === 'KeyH' && state === 'menu') startTutorial();
   else if (e.code === 'Escape') toMenu();
 });
 addEventListener('keyup', e => { if (e.code in KEYMAP) { keysHeld.delete(KEYMAP[e.code]); release(KEYMAP[e.code]); } });
@@ -690,13 +737,18 @@ function aimedLane(c){
   let best = 0; LANE_X.forEach((lx, i) => { if (Math.abs(x - lx) < Math.abs(x - LANE_X[best])) best = i; });
   return best;
 }
+// the baton counts only while raised (tip above chest height), so you can lower it to move between lanes
+const RAISE = 0.45; // m below your eyes
+const CAM = new THREE.Vector3();
+function raised(c){ camera.getWorldPosition(CAM); return c.userData.tip.getWorldPosition(TIP).y > CAM.y - RAISE; }
 function trigger(c){
-  if (state === 'play' && !paused) { const l = aimedLane(c); if (l >= 0) { c.userData.lane = l; press(l, c); } return; }
+  if (state === 'play' && !paused) { if (!raised(c)) return; const l = aimedLane(c); if (l >= 0) { c.userData.lane = l; press(l, c); } return; }
+  if (state === 'tutorial') { if (tutStep === TUT.length - 1) tutNext(); return; }
   aim(c); const hit = ray.intersectObject(menu.mesh)[0]; if (!hit) return;
   const y = (1 - hit.uv.y) * MENU_H, x = hit.uv.x * 1024;
   if (paused) { if (y >= PAUSE_BTN[0][0] && y <= PAUSE_BTN[0][1]) pause(false); else if (y >= PAUSE_BTN[1][0] && y <= PAUSE_BTN[1][1]) toMenu(); return; }
   if (state === 'results') return toMenu();
-  if (y >= NAV_Y && y <= NAV_Y + 80) { if (x < 360) changeVenue(-1); else if (x > 1024-360) changeVenue(1); return; }
+  if (y >= NAV_Y && y <= NAV_Y + 80) { if (x < 360) changeVenue(-1); else if (x > 1024-360) changeVenue(1); else startTutorial(); return; }
   const card = Math.floor((y - CARD_Y) / CARD_STEP);
   if (card >= 0 && card < 4 && (y - CARD_Y) % CARD_STEP < CARD_H) press(card, c);
 }
@@ -722,7 +774,6 @@ const ctrls = [0, 1].map(i => {
 // ---------- loop ----------
 const M = new THREE.Matrix4(), base = new THREE.Matrix4(), V = new THREE.Vector3(), RZ = new THREE.Matrix4(), TIP = new THREE.Vector3(), TMP_C = new THREE.Color();
 const FLICK_VY = 0.6;      // m/s upward baton speed that counts as a conducting stroke
-let batonPeak = 0;         // fastest recent upward stroke, shown on the HUD for tuning
 const PAUSE_BUTTONS = [4, 5, 6, 7, 8, 9, 10, 11, 12]; // A/B/X/Y and any extra (e.g. menu) buttons the browser exposes
 let lastTime = perfNow();
 function maestro(c, time, dt){
@@ -732,15 +783,12 @@ function maestro(c, time, dt){
   u.btnDown = down;
   u.tip.getWorldPosition(TIP);
   u.vy = 0.3*u.vy + 0.7*(TIP.y - u.prevTip.y)/Math.max(dt, 1e-3); u.prevTip.copy(TIP);
-  u.tip.scale.setScalar(0.015 + 0.03*Math.max(0, 1 - (time - u.flickT)/0.25)); // tip flashes on every stroke
+  u.tip.scale.setScalar((state !== 'menu' && raised(c) ? 0.025 : 0.015) + 0.03*Math.max(0, 1 - (time - u.flickT)/0.25)); // tip flashes on every stroke
   if (state !== 'play' || paused) return;
-  if (u.vy > batonPeak) batonPeak = u.vy;
-  const l = aimedLane(c); if (l >= 0) { u.lastLane = l; u.lastLaneT = time; }
-  // point at a lane, then raise the baton = conduct that note
+  // an upward stroke flashes the tip and buzzes: feel for the beat (notes are sung by trigger + raised baton)
   if (u.vy > FLICK_VY && time - u.flickT > 0.18){
     u.flickT = time;
     gp.hapticActuators?.[0]?.pulse?.(0.25, 20);
-    if (time - u.lastLaneT < 0.5) press(u.lastLane, c, !!u.triggerDown);
   }
 }
 function tick(){
@@ -749,19 +797,20 @@ function tick(){
   if (renderer.xr.isPresenting && needCalib > 0 && --needCalib === 0) calibrate();
   ctrls.forEach(c => { maestro(c, time, dt);
     c.userData.beans.emissive.copy(c.userData.beanColor).multiplyScalar(0.9*Math.max(0, 1 - (time - c.userData.beanT)/0.4)); });
-  updateSparks(dt); VENUES[venue].update(time, dt);
+  updateSparks(dt); VENUES[venue].update(time, dt); checkTutorial(time);
   if (state === 'play' && paused) beatPos = beatAt(S.segs, songNow() - S.t0);
   else if (state === 'play'){
     scheduleBacking();
     const now = songNow(), st = now - S.t0; beatPos = beatAt(S.segs, st); exc = 0.12 + Math.min(S.combo, 40)/40*0.3;
     S.holds.forEach((h, lane) => { if (!h) return;
+      if (h.ctrl && (!raised(h.ctrl) || aimedLane(h.ctrl) !== lane)) { release(lane); return; } // a long note needs the baton up, on its lane
       band[lane].userData.singT = time; pads[lane].userData.glow = 1; drawTail(h.n, 0, now);
       const from = h.ctrl ? h.ctrl.userData.tip.getWorldPosition(TIP) : pads[lane].position; // the special effect
       for (let k=0; k<3; k++) spark(from, LANES[lane]);
       if (now >= h.n.end) finishHold(lane, true); });
     // trace the melody: while a trigger (or key) is held, every note reaching the line in the lane you point at is
     // sung, so you follow the tune in one motion instead of tapping each note. On time = PURRFECT, late = GOOD.
-    const tracing = ctrls.filter(c => c.userData.triggerDown && c.userData.src).map(c => [c, aimedLane(c)]).filter(([, l]) => l >= 0);
+    const tracing = ctrls.filter(c => c.userData.triggerDown && c.userData.src && raised(c)).map(c => [c, aimedLane(c)]).filter(([, l]) => l >= 0);
     keysHeld.forEach(l => tracing.push([null, l]));
     for (const [c, l] of tracing) if (c) spark(c.userData.tip.getWorldPosition(TIP), LANES[l]); // the baton leaves a trail
     if (tracing.length) for (const n of S.notes){
@@ -771,6 +820,7 @@ function tick(){
       if (tr) sing(n, Math.abs(now - n.time), n.lane, tr[0], true);
     }
     for (const n of S.notes){
+      if (n.missed) { const k = now - n.time; n.mesh.visible = k < 0.5; if (k < 0.5) n.mesh.position.z = HIT_Z + k*SPEED; continue; }
       if (n.judged) continue;
       const dtn = n.time - now;
       if (dtn < -W_GOOD) { miss(n); continue; }
@@ -829,7 +879,7 @@ function tick(){
   bursts.forEach(b => { const k = (time - b.userData.t)/0.35; b.visible = k < 1; if (k < 1) { b.scale.setScalar(1 + k*1.5); b.material.opacity = 1 - k; } });
   const jk = time - judgeT; judge.mesh.material.opacity = Math.max(0, 1 - jk/0.7); judge.mesh.position.y = HY + 0.45 + jk*0.1;
 
-  ctrls.forEach(c => { const l = c.userData.src && state === 'play' ? aimedLane(c) : -1, cur = c.userData.cursor;
+  ctrls.forEach(c => { const l = c.userData.src && (state === 'play' || state === 'tutorial') ? aimedLane(c) : -1, cur = c.userData.cursor;
     cur.visible = l >= 0; if (l >= 0) { cur.position.x = LANE_X[l]; cur.material.color.copy(LANES[l]); } });
   if (!renderer.xr.isPresenting) camera.rotation.set(pitch, -yaw, 0, 'YXZ');
   updateScreens();
@@ -837,7 +887,8 @@ function tick(){
 }
 setLayout(4);
 { let k = 0; while (k+1 < TIERS.length && unlocked(k+1)) k++; applyVenue(k); } // open at the furthest unlocked venue
-drawMenu();
+let tutSeen = null; try { tutSeen = localStorage.getItem(TUT_KEY); } catch {}
+if (!tutSeen && !Object.keys(best).length) startTutorial(); else drawMenu(); // brand-new players start with the tutorial
 renderer.setAnimationLoop(tick);
 
 // self-check (full song checks live in the offline song validator)

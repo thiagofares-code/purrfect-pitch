@@ -160,7 +160,7 @@ export function buildVenues({ THREE, scene, add, lamb, basic, canvasTex }){
     // roof ring with floodlights pointing at the stage
     add(new THREE.TorusGeometry(23, 0.5, 8, 96).rotateX(Math.PI/2), lamb(0x2a2e3a), 0, 16, 0, g);
     const beamGeo = new THREE.ConeGeometry(2.2, 1, 20, 1, true).translate(0, -0.5, 0).rotateX(-Math.PI/2); // tip at origin, opens along +z
-    for (let i=0;i<12;i++){ const a = i/12*Math.PI*2, x = 23*Math.sin(a), z = 23*Math.cos(a);
+    for (let i=0;i<6;i++){ const a = (i + 0.5)/6*Math.PI*2, x = 23*Math.sin(a), z = 23*Math.cos(a);
       const lamp = add(new THREE.BoxGeometry(1.6, 0.9, 0.3), noFog(0xf4f8ff), x, 15.4, z, g); lamp.lookAt(0, 0, 0);
       halo(g, x*0.98, 15.4, z*0.98, 5, 0xe8f0ff, 0.6);
       // beams land on the stands, not the stage: aimed at the player they'd wash out the whole view
@@ -172,7 +172,7 @@ export function buildVenues({ THREE, scene, add, lamb, basic, canvasTex }){
       const frame = add(new THREE.BoxGeometry(9.6, 5.6, 0.3), lamb(0x111111), x, 9.5, z - 0.2, g); frame.lookAt(0, 9.5, 0);
       const sc = add(new THREE.PlaneGeometry(9, 5.06), noFog(0x223344), x, 9.5, z, g); sc.lookAt(0, 9.5, 0); return sc; });
     stars(g, 200, 0.45);
-    venues.push({ group:g, crowd: crowd.slice(0, 700), curtains:'none', sign:false, fog:[40, 120], fx:{ fireworks:true, confetti:true, fountains:true }, screens,
+    venues.push({ group:g, crowd: crowd.filter((_, i) => i % 3 === 0), curtains:'none', sign:false, fog:[40, 120], fx:{ fireworks:true, confetti:true, fountains:true }, screens,
       fireworkAt: () => { const a = R(0, Math.PI*2), r = R(16, 26); return new THREE.Vector3(r*Math.sin(a), R(20, 32), r*Math.cos(a)); }, update(){} }); }
 
   for (const v of venues) { v.group.visible = false; scene.add(v.group); for (const p of v.crowd) p.face = face(p.x, p.z); }
