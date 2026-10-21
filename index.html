@@ -14,7 +14,7 @@
 <body>
 <div id="start"><h1>🐱 Purrfect Pitch</h1><p>Lead the cat choir. Click to start (sound on).</p></div>
 <div id="help">Desktop: drag to look · <b>D F J K</b> (+<b>L</b> from venue 3) hit lanes · <b>1–4</b> pick song · <b>← →</b> venue · <b>Esc</b> menu · <b>C</b> credits<br>
-Quest: Enter VR · raise the baton, hold the trigger and trace the melody (lower it to cross lanes) · <b>H</b> how to play · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
+Quest: Enter VR · hold the trigger and trace the melody with the baton · <b>H</b> how to play · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -24,7 +24,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v20'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v21'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -462,7 +462,7 @@ function drawLabels(){
   const g = labelTex.image.getContext('2d'), w = 1024, n = LANES.length; g.clearRect(0, 0, w, 102);
   g.textAlign = 'center'; g.font = 'bold 30px system-ui';
   LANE_X.forEach((_, i) => { g.fillStyle = LANE_HEX[i]; g.fillText(KEYS[i], w*(i+0.5)/n, 40); });
-  g.fillStyle = '#cbb8ff'; g.fillText('raise the baton, hold the trigger, trace the melody', w/2, 85); labelTex.needsUpdate = true;
+  g.fillStyle = '#cbb8ff'; g.fillText('hold the trigger + trace the melody with your baton', w/2, 85); labelTex.needsUpdate = true;
 }
 // switch the highway, pads, notes and singers between 4 and 5 lanes
 function setLayout(n){
@@ -518,9 +518,8 @@ function drawMenu(){ const v = TIERS[venue], open = unlocked(venue); menu.redraw
 // ---------- tutorial: the first thing a new player sees; replay it from the menu (How to play, or H) ----------
 const TUT_KEY = 'purrfect-pitch-tutorial-v1';
 const TUT = [
-  ['Raise your baton', ['Lift your hand above your chest.', 'The baton tip grows while it is raised:', 'only a raised baton conducts.']],
   ['Point and hold', ['Aim at a lane on the note highway', 'and hold the trigger (the back button).']],
-  ['Conduct the cats!', ['A note is sung when it reaches the line', 'in the lane you point at. Lower the baton', 'to cross lanes without singing.', 'Long notes: keep it up on the lane', 'until the tail ends.']],
+  ['Conduct the cats!', ['Keep the trigger held and follow the tune:', 'a note is sung when it reaches the line', 'in the lane you point at. Waving fast over', 'every lane does not count. Long notes: stay', 'on the lane until the tail ends.']],
 ];
 let tutStep = 0, tutT = 0;
 function startTutorial(){ state = 'tutorial'; tutStep = 0; tutT = perfNow(); drawTutorial(); menu.mesh.visible = true; }
@@ -537,11 +536,10 @@ function tutNext(){
   try { localStorage.setItem(TUT_KEY, '1'); } catch {}
   applyVenue(0); startSong(0);
 }
-// in VR, steps 1 and 2 advance by doing them (after a moment, so a hand already up doesn't skip the step)
+// in VR, step 1 advances by doing it (after a moment, so a trigger already held doesn't skip it)
 function checkTutorial(time){
   if (state !== 'tutorial' || !renderer.xr.isPresenting || time - tutT < 1) return;
-  const ok = tutStep === 0 ? ctrls.some(c => c.userData.src && raised(c))
-    : tutStep === 1 && ctrls.some(c => c.userData.src && c.userData.triggerDown && raised(c) && aimedLane(c) >= 0);
+  const ok = tutStep === 0 && ctrls.some(c => c.userData.src && c.userData.triggerDown && aimedLane(c) >= 0);
   if (ok) tutNext();
 }
 // ---------- credits (menu button or C); any button or key goes back ----------
@@ -672,7 +670,7 @@ function scheduleBacking(){
 }
 const MISS_MAT = basic(0xff2a2a, { map:pawTex, transparent:true });
 // crowd meter (0-1): hits fill it, misses drain it (gentler in the early venues); empty and the crowd boos you off
-const METER_START = 0.6, METER_HIT = 0.025, meterDrain = () => 0.04 + 0.01*venue;
+const METER_START = 1, METER_HIT = 0.03, meterDrain = () => 0.03 + 0.005*venue;
 function miss(n){ lastMissT = perfNow(); n.judged = n.missed = true; n.mesh.material = MISS_MAT; if (n.tail) n.tail.visible = false;
   S.combo = 0; S.miss++; S.meter -= meterDrain(); showJudge('MISS', '#ff6b6b'); drawHud(); if (S.meter <= 0) failSong(); }
 function failSong(){
@@ -760,12 +758,11 @@ function aimedLane(c){
   let best = 0; LANE_X.forEach((lx, i) => { if (Math.abs(x - lx) < Math.abs(x - LANE_X[best])) best = i; });
   return best;
 }
-// the baton counts only while raised (tip above chest height), so you can lower it to move between lanes
-const RAISE = 0.45; // m below your eyes
-const CAM = new THREE.Vector3();
-function raised(c){ camera.getWorldPosition(CAM); return c.userData.tip.getWorldPosition(TIP).y > CAM.y - RAISE; }
+// anti-sweep: tracing sings a lane only once the baton has rested on it for DWELL s, so waving fast over every lane catches nothing
+const DWELL = 0.09;
+const steady = c => c.userData.aimLane >= 0 && perfNow() - c.userData.aimSince >= DWELL ? c.userData.aimLane : -1;
 function trigger(c){
-  if (state === 'play' && !paused) { if (!raised(c)) return; const l = aimedLane(c); if (l >= 0) { c.userData.lane = l; press(l, c); } return; }
+  if (state === 'play' && !paused) { const l = aimedLane(c); if (l >= 0) { c.userData.lane = l; press(l, c); } return; }
   if (state === 'tutorial') { if (tutStep === TUT.length - 1) tutNext(); return; }
   aim(c); const hit = ray.intersectObject(menu.mesh)[0]; if (!hit) return;
   const y = (1 - hit.uv.y) * MENU_H, x = hit.uv.x * 1024;
@@ -788,7 +785,7 @@ const ctrls = [0, 1].map(i => {
   c.userData.tip = add(SPH, basic(0xffffff), 0, 0, -0.3, c); c.userData.tip.scale.setScalar(0.015);
   const paw = makePaw(THREE); c.add(paw); // white-gloved cat paw holding the baton
   c.userData.beans = paw.userData.beans; c.userData.beanT = -9; c.userData.beanColor = new THREE.Color();
-  c.userData.prevTip = new THREE.Vector3(); c.userData.vy = 0; c.userData.flickT = -9; c.userData.lastLane = -1; c.userData.lastLaneT = -9;
+  c.userData.prevTip = new THREE.Vector3(); c.userData.vy = 0; c.userData.flickT = -9; c.userData.aimLane = -1; c.userData.aimSince = 0;
   rig.add(c);
   c.userData.cursor = add(new THREE.RingGeometry(0.06, 0.09, 24).rotateX(-Math.PI/2), basic(0xffffff, { transparent:true, opacity:0.8, side:THREE.DoubleSide }), 0, HY+0.05, HIT_Z);
   return c;
@@ -806,9 +803,10 @@ function maestro(c, time, dt){
   u.btnDown = down;
   u.tip.getWorldPosition(TIP);
   u.vy = 0.3*u.vy + 0.7*(TIP.y - u.prevTip.y)/Math.max(dt, 1e-3); u.prevTip.copy(TIP);
-  u.tip.scale.setScalar((state !== 'menu' && raised(c) ? 0.025 : 0.015) + 0.03*Math.max(0, 1 - (time - u.flickT)/0.25)); // tip flashes on every stroke
+  u.tip.scale.setScalar(0.015 + 0.03*Math.max(0, 1 - (time - u.flickT)/0.25)); // tip flashes on every stroke
+  const al = aimedLane(c); if (al !== u.aimLane) { u.aimLane = al; u.aimSince = time; }
   if (state !== 'play' || paused) return;
-  // an upward stroke flashes the tip and buzzes: feel for the beat (notes are sung by trigger + raised baton)
+  // an upward stroke flashes the tip and buzzes: feel for the beat (notes are sung by trigger + aim)
   if (u.vy > FLICK_VY && time - u.flickT > 0.18){
     u.flickT = time;
     gp.hapticActuators?.[0]?.pulse?.(0.25, 20);
@@ -826,14 +824,14 @@ function tick(){
     scheduleBacking();
     const now = songNow(), st = now - S.t0; beatPos = beatAt(S.segs, st); exc = 0.12 + Math.min(S.combo, 40)/40*0.3;
     S.holds.forEach((h, lane) => { if (!h) return;
-      if (h.ctrl && (!raised(h.ctrl) || aimedLane(h.ctrl) !== lane)) { release(lane); return; } // a long note needs the baton up, on its lane
+      const hu = h.ctrl?.userData; if (hu && hu.aimLane !== lane && time - hu.aimSince > DWELL) { release(lane); return; } // a long note needs the baton kept on its lane
       band[lane].userData.singT = time; pads[lane].userData.glow = 1; drawTail(h.n, 0, now);
       const from = h.ctrl ? h.ctrl.userData.tip.getWorldPosition(TIP) : pads[lane].position; // the special effect
       for (let k=0; k<3; k++) spark(from, LANES[lane]);
       if (now >= h.n.end) finishHold(lane, true); });
     // trace the melody: while a trigger (or key) is held, every note reaching the line in the lane you point at is
     // sung, so you follow the tune in one motion instead of tapping each note. On time = PURRFECT, late = GOOD.
-    const tracing = ctrls.filter(c => c.userData.triggerDown && c.userData.src && raised(c)).map(c => [c, aimedLane(c)]).filter(([, l]) => l >= 0);
+    const tracing = ctrls.filter(c => c.userData.triggerDown && c.userData.src).map(c => [c, steady(c)]).filter(([, l]) => l >= 0);
     keysHeld.forEach(l => tracing.push([null, l]));
     for (const [c, l] of tracing) if (c) spark(c.userData.tip.getWorldPosition(TIP), LANES[l]); // the baton leaves a trail
     if (tracing.length) for (const n of S.notes){
