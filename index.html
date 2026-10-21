@@ -24,7 +24,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=11';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v15'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v16'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -94,9 +94,9 @@ function boom(at){ // firework: a low thump and a crackle, from where it burst
 // Praat PSOLA, all within 8 cents of the note). A note plays from its lane's own cat when that cat covers
 // it, otherwise from the nearest cat that does. The synth is the fallback while samples load.
 const VOICE_DEFS = [ // slot order = lane colours: pink, yellow, purple soloist, cyan, green
-  { name:'tom',     natural:65.7, lo:62, hi:74 },
-  { name:'ribs',    natural:71.4, lo:65, hi:81 },
-  { name:'soloist', natural:75.3, lo:67, hi:83 },
+  { name:'tom',     natural:68.3, lo:62, hi:74 }, // "Grumpy", picked on audition.html
+  { name:'ribs',    natural:76.0, lo:68, hi:84 }, // "Kitten B"
+  { name:'soloist', natural:80.1, lo:72, hi:91 }, // "Cartoon kitten"
   { name:'mitten',  natural:74.5, lo:67, hi:83 },
   { name:'kitty',   natural:78.5, lo:70, hi:91 },
 ];

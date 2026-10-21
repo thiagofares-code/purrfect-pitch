@@ -11,10 +11,11 @@ SHORT = 0.32      # seconds: length of the quick "mew" used for short notes
 VOICES = [  # name, source wav, meow start/len (s, from the grader), natural pitch (MIDI), notes to render, shape
     # shape = semitones of the cat's own "m-ee-ow" pitch curve to keep, with the held middle locked onto the note
     # (None = flatten to the note, as before). Flattening a strongly shaped meow turns it into a robotic "meh".
-    ('tom',     'soundreality-cat-meow-fx-461188.wav',          0.04, 1.08, 65.7, range(62, 75), 4.0),
-    ('ribs',    'soulfuljamtracks-cat-meow-2-fx-323466.wav',    0.06, 1.06, 71.4, range(65, 82), 4.0),
+    # pink, yellow and purple voices were picked by ear on audition.html; they keep their whole natural curve (99)
+    ('tom',     'alex_jauk-cat-meow-noise-438008.wav',          0.13, 0.62, 68.3, range(62, 75), 99),  # "Grumpy"
+    ('ribs',    'dragon-studio-kitten-sfx-405457.wav',          0.03, 0.78, 76.0, range(68, 85), 99),  # "Kitten B"
     ('mitten',  'sound_garage-cat-meow-10-fx-306188.wav',       0.09, 1.36, 74.5, range(67, 84), None),
-    ('soloist', 'dragon-studio-kitten-sfx-405457.wav',          1.65, 0.72, 75.3, range(67, 84), None),
+    ('soloist', 'dragon-studio-cartoon-kitten-meow-487668.wav', 0.05, 1.59, 80.1, range(72, 92), 99),  # "Cartoon kitten"
     ('kitty',   'freesound_community-kitty-meow-85182.wav',     0.04, 0.43, 78.5, range(70, 92), None),
 ]
 st = lambda f: 12 * np.log2(f / 440.0) + 69
