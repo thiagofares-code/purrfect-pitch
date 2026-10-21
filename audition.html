@@ -21,14 +21,13 @@
   .num { font-weight:700; font-size:22px; }
   .label { color:var(--muted); font-size:14px; margin-bottom:10px; min-height:21px; }
   button { width:100%; margin-top:6px; padding:10px; border:0; border-radius:10px; font:600 15px system-ui; cursor:pointer; color:#1a0f24; }
-  button.raw { background:#3a2f55; color:var(--text); font-weight:500; }
   button:focus-visible { outline:3px solid #fff; outline-offset:2px; }
 </style>
 </head>
 <body>
 <main>
   <h1>🐱 Cat Auditions</h1>
-  <p class="lead">Each cat sings three notes, then a little phrase, tuned the way it would be in the game. <b>Original</b> is the untouched recording. Pick a favourite number for each spot.</p>
+  <p class="lead">Each cat sings three notes, then a little phrase, tuned the way it would be in the game. Pick a favourite number for each spot.</p>
   <div id="spots"></div>
 </main>
 <script>
@@ -47,9 +46,8 @@ fetch('sounds/audition/audition.json').then(r => r.json()).then(m => {
     m[s.key].forEach((c, i) => {
       const card = document.createElement('div'); card.className = 'card' + (i === 0 ? ' now' : '');
       card.innerHTML = `<div class="num">${i + 1}</div><div class="label">${c.label}</div>
-        <button style="background:${s.color}">▶ Tuned</button><button class="raw">Original</button>`;
-      const [tuned, raw] = card.querySelectorAll('button');
-      tuned.onclick = () => play(`sounds/audition/${c.id}.mp3`); raw.onclick = () => play(`sounds/audition/${c.id}-raw.mp3`);
+        <button style="background:${s.color}">▶ Tuned</button>`;
+      card.querySelector('button').onclick = () => play(`sounds/audition/${c.id}.mp3`);
       sec.querySelector('.grid').appendChild(card);
     });
     root.appendChild(sec);

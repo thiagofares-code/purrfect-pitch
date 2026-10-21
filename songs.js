@@ -25,11 +25,11 @@ function harmonyBelow(m, scale){ for (const iv of [3, 4, 5, 7, 12]) if (scale.ha
 const NAMES = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
 export const midi = n => { const m = n.match(/^([A-G])(#?)(-?\d)$/); return 12*(+m[3]+1) + NAMES[m[1]] + (m[2] ? 1 : 0); };
 
-// chord symbols in `chords` (same NAME:duration tokens as the melody; N = no chord): C, Am, G7, F#m7, Bbmaj7, Cdim
-const QUALITY = { '':[0,4,7], m:[0,3,7], '7':[0,4,7,10], m7:[0,3,7,10], maj7:[0,4,7,11], dim:[0,3,6] };
+// chord symbols in `chords` (same NAME:duration tokens as the melody; N = no chord): C, Am, G7, F#m7, Bbmaj7, Cdim, Eaug
+const QUALITY = { '':[0,4,7], m:[0,3,7], '7':[0,4,7,10], m7:[0,3,7,10], maj7:[0,4,7,11], dim:[0,3,6], aug:[0,4,8] };
 export function chord(tok){
   if (tok === 'N') return null;
-  const m = tok.match(/^([A-G])(#|b)?(maj7|m7|dim|m|7)?$/); if (!m) throw new Error(`bad chord ${tok}`);
+  const m = tok.match(/^([A-G])(#|b)?(maj7|m7|dim|aug|m|7)?$/); if (!m) throw new Error(`bad chord ${tok}`);
   const root = (NAMES[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + 12) % 12;
   return { name: tok, root, tones: QUALITY[m[3] || ''].map(i => (root + i) % 12) };
 }
@@ -76,8 +76,11 @@ const ELISE = 'E5 D#5 E5 D#5 E5 B4 D5 C5 A4:2 R C4 E4 A4 B4:2 R E4 G#4 B4 C5:2 R
 const SPRING = 'E5:0.5 G#5:0.5 G#5:0.5 G#5:0.5 F#5:0.25 E5:0.25 B5:1.5 B5:0.25 A5:0.25 G#5:0.5 G#5:0.5 G#5:0.5 F#5:0.25 E5:0.25 B5:1.5 ' +
   'B5:0.25 A5:0.25 G#5:0.5 A5:0.5 B5:0.5 A5:0.5 G#5:0.5 F#5:1 G#5:0.5 E5:0.5 F#5:0.5 D#5:0.5 E5:2';
 const TELL1 = 'E4:0.5 E4:0.5 E4 E4:0.5 E4:0.5 E4 E4:0.5 E4:0.5 A4 B4 C#5 ';
-// Morning Mood, Swan Lake, La donna è mobile, Sugar Plum Fairy and Hungarian Dance No. 5 were checked against
-// flutetunes.com scores (melody and the piano part's harmony); the other melodies are standard versions of each theme.
+// Morning Mood, Swan Lake, La donna è mobile, Sugar Plum Fairy and Hungarian Dance No. 5: melody and chords read from
+// public-domain editions (Grieg op.46 piano, Schirmer 1899 · Swan Lake full score, Jurgenson 1877 · Rigoletto vocal score,
+// Ricordi 1871 · Nutcracker Suite piano, Schirmer 1922 · Hungarian Dances piano, Schirmer 1893). Our simplifications:
+// ornaments, grace notes and 16th runs flattened, short rests merged into holds, octaves moved to the choir's range.
+// The other melodies are standard versions of each theme.
 const SWAN1 = 'F#5:2 B4:0.5 C#5:0.5 D5:0.5 E5:0.5 F#5:1.5 D5:0.5 F#5:1.5 D5:0.5 F#5:1.5 B4:0.5 D5:0.5 B4:0.5 G4:0.5 D5:0.5 ';
 const DONNA = 'D#5 D#5 D#5 F#5:0.75 E5:0.25 C#5:2 C#5 C#5 C#5 E5:0.75 D#5:0.25 B4:2 ';
 const PLUM = 'G6:0.25 E6:0.25 G6:0.5 F#6:0.5 D#6:0.5 E6:0.5 D6:0.25 D6:0.25 D6:0.5 C#6:0.25 C#6:0.25 C#6:0.5 C6:0.25 C6:0.25 C6:0.5 B5:0.25 E6:0.25 C6:0.25 E6:0.25 B5:1.5 ';
@@ -98,9 +101,9 @@ export const SONGS = [
     B:'B4:0.5 G#4:0.5 F#4:0.5 E4:0.5 F#4:0.5 G#4:0.5 B4:0.5 G#4:0.5 F#4:0.5 E4:0.5 F#4:0.5 G#4:0.5 B4:0.5 G#4:0.5 B4:0.5 C#5:0.5 G#4:0.5 C#5:0.5 D#5:0.5 C5:0.5 A#4:0.5 G#4:1.5',
     C:'D#6:0.5 C6:0.5 A#5:0.5 G#5:0.5 A#5:0.5 C6:0.5 D#6:0.5 C6:0.5 A#5:0.5 G#5:0.5 A#5:0.5 C6:0.5 D#6:0.5 C6:0.5 D#6:0.5 E6:0.5 C6:0.5 E6:0.5 D#6:0.5 C6:0.5 A#5:0.5 G#5:1.5',
     D:'D#5:0.5 C5:0.5 A#4:0.5 G#4:0.5 A#4:0.5 C5:0.5 D#5:0.5 C5:0.5 A#4:0.5 G#4:0.5 A#4:0.5 C5:0.5 D#5:0.5 C5:0.5 D#5:0.5 E5:0.5 C#5:0.5 E5:0.5 F#5:0.5 D#5:0.5 C#5:0.5 B4:1.5',
-    E:'F#6:0.5 D#6:0.5 C#6:0.5 B5:0.5 C#6:0.5 D#6:0.5 D#6:3 F#6:0.5 D#6:0.5 B5:2 F#6:0.5 D#6:0.5 B5:0.5 B4:1.5' },
-    chords:{ A:'E:3 E:3 E:1.5 A:1.5 B:1.5 E:1.5', B:'E:3 E:3 E:1.5 C#m:1.5 D#:1.5 G#:1.5', C:'G#:3 G#:3 G#:1.5 C#:1.5 D#:1.5 G#:1.5',
-      D:'G#:3 G#:3 G#:1.5 C#m:1.5 F#:1.5 B:1.5', E:'B:3 B7:3 E:3 B7:1.5 E:1.5' } },
+    E:'F#6:0.5 D#6:0.5 C#6:0.5 B5:0.5 C#6:0.5 D#6:0.5 F#5:0.5 D#5:0.5 C#5:0.5 B4:0.5 C#5:0.5 D#5:0.5 F#6:0.5 D#6:0.5 B5:0.5 F#5:0.5 D#5:0.5 B4:0.5 F#6:0.5 D#6:0.5 B5:0.5 F#5:0.5 D#5:0.5 B4:0.5' },
+    chords:{ A:'E:3 E:3 E:1.5 C#m:1.5 E:3', B:'E:3 E:3 E:1.5 C#m:1.5 G#:3', C:'G#:3 G#:3 G#:1.5 Eaug:1.5 G#:3',
+      D:'G#:3 G#:3 G#:1.5 C#m:1.5 B:3', E:'B:3 B:3 B:3 B:3' } },
   { title:'Ode to Joy', composer:'Beethoven', bpm:112, bar:4, hat:1, pickup:0, form:'ABCB', parts:{
     A:'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 E4:1.5 D4:0.5 D4:2',
     B:'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 D4:1.5 C4:0.5 C4:2',
@@ -121,10 +124,10 @@ export const SONGS = [
     chords:{ A:'D:2 A:2 Bm:2 F#m:2 G:2 D:2 G:2 A:2', B:'D:2 A:2 Bm:2 F#m:2 G:2 D:2 G:2 A:2', C:'D:2 A:2 Bm:2 F#m:2 G:2 D:2 G:2 A:2', D:'D:2 A:2 Bm:2 F#m:2 G:2 D:2 G:2 A:2' } },
   { title:'Swan Lake', composer:'Tchaikovsky', bpm:84, bar:4, hat:1, pickup:0, form:'ABCAB', parts:{
     A: SWAN1 + 'B4:2.5 E5:0.5 D5:0.5 C#5:0.5',
-    B: SWAN1 + 'B4:4',
+    B: SWAN1 + 'B4:3 B4:1',
     C:'C#5 D5 E5 F#5:0.5 G5:0.5 A5:1.5 G5:0.5 F#5 G5:0.5 A5:0.5 B5:1.5 A5:0.5 G5 A5:0.5 B5:0.5 C#6:1.5 B5:0.5 F#5:0.5 D5:0.5 C#5:0.5 B4:0.5 ' +
       'C#5 D5 E5 F#5:0.5 G5:0.5 A5:1.5 G5:0.5 F#5 G5:0.5 A5:0.5 B5:1.5 A5:0.5 G5 A5:0.5 B5:0.5 C6:1.5 G5:0.5 E5 G5:0.5 C6:0.5 C#6:1.5 G#5:0.5 C#6:1.5 F#5:0.5' },
-    chords:{ A:'Bm:4 Bm:4 Bm:2 G:2 Bm:2 F#:2', B:'Bm:4 Bm:4 Bm:2 G:2 Bm:4', C:'A:4 D:4 G:4 F#:4 A:4 D:4 G:4 C:4 F#:4' } },
+    chords:{ A:'Bm:4 Bm:4 Bm:2 G:2 Bm:2 F#:2', B:'Bm:4 Bm:4 Bm:2 G:2 Bm:4', C:'A:4 D:4 G:4 F#:4 A:4 D:4 G:4 C:4 C#:2 F#:2' } },
   { title:'Symphony No. 5', composer:'Beethoven', bpm:180, bar:4, hat:2, pickup:0, form:'ABABC', parts:{ // units: eighths
     A:'R G4 G4 G4 D#4:4 R F4 F4 F4 D4:8',
     B:'R G4 G4 G4 D#4 G#4 G#4 G#4 G4 D#5 D#5 D#5 C5:4 R G4 G4 G4 D4 G#4 G#4 G#4 G4 F5 F5 F5 D5:4',
@@ -142,10 +145,10 @@ export const SONGS = [
     D:'E4:1.5 R:0.5 G4:1.5 R:0.5 E4:0.5 E4:0.5 E4:0.5 F#4:0.5 G4:1 A4:1 B4:0.5 A4:0.5 G4:0.5 E4:0.5 D4:2' },
     chords:{ A:'Dm:2 Dm:2 Gm:2 Dm:2 A7:2 A7:2 A7:2', B:'Dm:2 Dm:2 Gm:2 Dm:2 A7:2 A7:2 Dm:2', C:'D:2 D:2 D:2 A7:2 A7:2 A7:2', D:'A7:2 A7:2 A7:2 D:2 A7:2 D:2' } },
   { title:'La donna è mobile', composer:'Verdi', bpm:200, bar:3, hat:1, pickup:0, form:'ABC', parts:{ // units: eighths
-    A: DONNA + 'D#5 C#5 B4:0.75 C#5:0.25 B4:0.75 A#4:0.25 A#4:2 C#5 B4 G#4:0.75 A#4:0.25 G#4:0.75 F#4:0.25 F#4:2',
+    A: DONNA + 'D#5 C#5 B4 B4:0.75 A#4:0.25 A#4:2 C#5 B4 G#4 G#4:0.75 F#4:0.25 F#4:2',
     B: DONNA + 'D#5 C#5 B4 B4:0.75 A#4:0.25 A#4:2 C#5 B4 G#4 G#4:0.75 F#4:0.25 F#4:2',
-    C:'C#5:0.75 D#5:0.25 C#5 C#5 F#5 C#5:2 D#5:0.75 E5:0.25 D#5 D#5 G#5 D#5:2 F#5:0.75 G#5:0.25 F#5 F#5 G#5:2 F#5 E5:0.75 D#5:1.25 C#5 B4:3' }, // the E-F#-E grace turn is one note here: 0.07 s apart is unplayable
-    chords:{ A:'B:3 F#7:3 F#7:3 B:3 B:3 F#7:3 F#7:3 B:3', B:'B:3 F#7:3 F#7:3 B:3 B:3 F#7:3 F#7:3 B:3', C:'F#:3 F#:3 G#m:3 G#m:3 C#7:3 C#7:3 F#7:3 B:3' } },
+    C:'C#5:0.75 D#5:0.25 C#5 C#5 F#5 C#5:2 D#5:0.75 E5:0.25 D#5 D#5 G#5 D#5:2 F#5:0.75 G#5:0.25 F#5 F#5 G#5:2 F#5 E5 D#5 C#5 B4:3' }, // the E-F#-E triplet turn is one note here: 0.07 s apart is unplayable
+    chords:{ A:'B:3 F#7:3 F#7:3 B:3 B:3 F#7:3 F#7:3 B:3', B:'B:3 F#7:3 F#7:3 B:3 B:3 F#7:3 F#7:3 B:3', C:'C#7:3 F#:3 D#7:3 G#m:3 F#7:3 B:3 F#7:3 B:3' } },
   { title:'Für Elise', composer:'Beethoven', bpm:220, bar:6, hat:2, pickup:2, form:'AAB', parts:{ // units: sixteenths
     A: ELISE,
     B:'R:2 C5 D5 E5:4 G4 F5 E5 D5:3 F4 E5 D5 C5:3 E4 D5 C5 B4:3 R:4' },
@@ -169,8 +172,8 @@ export const SONGS = [
     A: HUNG,
     B:'C#5:1.5 F#5:0.25 A5:0.25 C#6:1.5 A5:0.5 G#5:1.5 A5:0.25 B5:0.25 A5:2 D5:0.25 E5:0.25 F#5:0.25 D5:0.25 C#5:0.25 D5:0.25 E5:0.25 C#5:0.25 ' +
       'B4:0.25 C#5:0.25 D5:0.25 B4:0.25 A4:0.25 B4:0.25 C#5:0.25 A4:0.25 B4:0.25 A4:0.25 A4:0.25 G#4:0.25 G#4:0.75 C#5:0.25 F#4:1 F#5:1',
-    C:'C#6 C#6 D6:1.5 C#6:0.5 B5 A#5:0.5 B5:0.5 C#6:0.25 B5:0.25 A#5:0.25 C#6:0.25 B5 B5 B5 C#6:1.5 B5:0.5 A5 G#5:0.5 A5:0.5 B5:0.25 A5:0.25 G#5:0.25 B5:0.25 A5' },
-    chords:{ A: HUNG_CH, B: HUNG_CH, C:'F#7:2 Bm:2 F#7:2 Bm:2 E7:2 A:2 E7:2 A:2' } },
+    C:'C#6 C#6 D6:1.5 C#6:0.5 R:0.5 B5 A#5:0.25 B5:0.25 C#6:0.25 B5:0.25 A#5:0.25 C#6:0.25 B5 B5 B5 C#6:1.5 B5:0.5 R:0.5 A5 G#5:0.25 A5:0.25 B5:0.25 A5:0.25 G#5:0.25 B5:0.25 A5' },
+    chords:{ A: HUNG_CH, B:'F#m:2 F#m:2 C#7:2 F#m:2 Bm:2 Bm:1 F#m:1 C#7:2 F#m:2', C:'F#7:2 F#7:2 Bm:2 Bm:2 E7:2 E7:2 A:2 A:2' } },
   // ---- 5 · The Stadium ----
   { title:'Rondo alla Turca', composer:'Mozart', bpm:360, bar:8, hat:2, pickup:0, form:'AAB', parts:{ // units: sixteenths
     A:'B4 A4 G#4 A4 C5:4 D5 C5 B4 C5 E5:4 F5 E5 D#5 E5 B5 A5 G#5 A5 B5 A5 G#5 A5 C6:8 A5:2 C6:2 B5:2 A5:2 G#5:2 A5:2 B5:2 A5:2 G#5:2 A5:2 B5:2 A5:2 G#5:2 F#5:2 E5:8',
