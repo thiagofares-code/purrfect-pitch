@@ -1,5 +1,5 @@
 """Build the tuned meow library: PSOLA-correct each chosen meow onto every note in its range, then verify.
-usage: python -I tune.py <wav dir> <out wav dir> <report json>"""
+usage: python -I tune.py <wav dir> <out wav dir> <report json> [suffixes to render, default: "" _s _xs]"""
 import json, sys, pathlib
 import numpy as np
 import parselmouth
@@ -8,6 +8,7 @@ from parselmouth.praat import call
 KEEP = 0.15       # share of the cat's own pitch movement kept, so it still sounds alive
 TARGET_RMS = 0.1  # every voice at the same loudness
 SHORT = 0.32      # seconds: length of the quick "mew" used for short notes
+XS = 0.2          # seconds: the quickest whole "m-ee-ow", for very fast passages
 VOICES = [  # name, source wav, meow start/len (s, from the grader), natural pitch (MIDI), notes to render, shape
     # shape = semitones of the cat's own "m-ee-ow" pitch curve to keep, with the held middle locked onto the note
     # (None = flatten to the note, as before). Flattening a strongly shaped meow turns it into a robotic "meh".
@@ -45,7 +46,8 @@ for name, wav, start, dur, natural, notes, shape in VOICES:
         for t, f in pts: call(new, 'Add point', t, hz(m + offset + keep * (st(f) - med)))
         call([new, manip], 'Replace pitch tier')
         dt = call('Create DurationTier', 'speed', 0, seg.duration)
-        call(dt, 'Add point', 0, ((SHORT + 0.08) if shape else SHORT) / seg.duration if suffix else 1.0)
+        short = SHORT if suffix == '_s' else XS
+        call(dt, 'Add point', 0, ((short + (0.08 if suffix == '_s' else 0.04)) if shape else short) / seg.duration if suffix else 1.0)
         call([dt, manip], 'Replace duration tier')
         out = call(manip, 'Get resynthesis (overlap-add)')
         y = out.values[0]; peak = np.max(np.abs(y))
@@ -59,7 +61,7 @@ for name, wav, start, dur, natural, notes, shape in VOICES:
         mid = p[int(len(p) * lo): max(int(len(p) * hi), int(len(p) * lo) + 1)]
         cents = 1200 * np.log2(mid / hz(m))
         return out, float(np.median(cents)), float(np.std(cents))
-    for m, suffix in [(m, s) for m in notes for s in ('', '_s')]:
+    for m, suffix in [(m, s) for m in notes for s in (sys.argv[4:] or ['', '_s', '_xs'])]:
         out, err, spread = render(m, suffix); offset = 0.0
         for _ in range(3):  # correction passes: shift by the measured error until the held middle sits on the note
             if not (shape and 3 < abs(err) < 150): break
