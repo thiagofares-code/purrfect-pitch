@@ -28,7 +28,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v21'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v22'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -840,7 +840,7 @@ function tick(){
     for (const [c, l] of tracing) if (c) spark(c.userData.tip.getWorldPosition(TIP), LANES[l]); // the baton leaves a trail
     if (tracing.length) for (const n of S.notes){
       if (n.time - now > 0.02) break;                     // still on its way to the line
-      if (n.judged || now - n.time > W_GOOD) continue;
+      if (n.judged) continue; // no late cut-off: on a slow frame a note can cross the line between two frames, and you were on its lane
       const tr = tracing.find(([, l]) => l === n.lane);
       if (tr) sing(n, Math.abs(now - n.time), n.lane, tr[0], true);
     }
