@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Purrfect Pitch</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b0716">
+<link rel="icon" href="icons/icon-192.png">
 <style>
   html,body{margin:0;height:100%;background:#0b0716;overflow:hidden;font-family:system-ui,sans-serif;color:#fff}
   #help{position:fixed;left:12px;top:12px;font-size:13px;background:#0009;padding:8px 10px;border-radius:8px;max-width:360px;line-height:1.45}
@@ -15,6 +18,7 @@
 <div id="start"><h1>🐱 Purrfect Pitch</h1><p>Lead the cat choir. Click to start (sound on).</p></div>
 <div id="help">Desktop: drag to look · <b>D F J K</b> (+<b>L</b> from venue 3) hit lanes · <b>1–4</b> pick song · <b>← →</b> venue · <b>Esc</b> menu · <b>C</b> credits<br>
 Quest: Enter VR · hold the trigger and trace the melody with the baton · <b>H</b> how to play · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
