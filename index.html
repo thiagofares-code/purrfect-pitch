@@ -17,7 +17,7 @@
 <body>
 <div id="start"><h1>🐱 Purrfect Pitch</h1><p>Lead the cat choir. Click to start (sound on).</p></div>
 <div id="help">Desktop: drag to look · <b>D F J K</b> (+<b>L</b> from venue 3) hit lanes · <b>1–4</b> pick song · <b>← →</b> venue · <b>Esc</b> menu · <b>C</b> credits<br>
-Quest: Enter VR · aim and press the trigger as each note reaches the line · <b>H</b> how to play · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
+Quest: Enter VR · tap the circles with your baton as notes arrive (hold the trigger for long notes) · <b>H</b> how to play · menu/A/B/X/Y = pause · <b>P</b> pauses on desktop</div>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
@@ -28,7 +28,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v23'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v24'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -46,7 +46,7 @@ const LAYOUTS = { 4:[0,1,3,4], 5:[0,1,2,3,4] }; // lane index -> slot
 const MENU_HEX = LAYOUTS[4].map(g => ALL_HEX[g]);  // song card colours
 const laneXs = n => Array.from({ length:n }, (_, i) => (i - (n-1)/2)*0.3);
 let LAY = LAYOUTS[4], LANES = LAY.map(g => ALL[g]), LANE_HEX = LAY.map(g => ALL_HEX[g]), LANE_X = laneXs(4), KEYS = [...'DFJK'];
-const HY = 0.95, HIT_Y = 1.35, TILT = 0.2, HIT_Z = -1.2, // HY: the highway's own height; it is lifted to HIT_Y at the hit line and tilted up by TILT rad
+const HY = 0.95, HIT_Y = 1.2, TILT = 0.2, HIT_Z = -0.8, // HY: the highway's own height; it is lifted to HIT_Y at the hit line and tilted up by TILT rad
       LEN = 13, SPEED = 5.5, LEAD = 3;
 const W_PERFECT = 0.07, W_GOOD = 0.15;
 const HOLD_MIN = 0.7; // seconds: notes at least this long become hold notes
@@ -460,7 +460,7 @@ function drawLabels(){
   const g = labelTex.image.getContext('2d'), w = 1024, n = LANES.length; g.clearRect(0, 0, w, 102);
   g.textAlign = 'center'; g.font = 'bold 30px system-ui';
   LANE_X.forEach((_, i) => { g.fillStyle = LANE_HEX[i]; g.fillText(KEYS[i], w*(i+0.5)/n, 40); });
-  g.fillStyle = '#cbb8ff'; g.fillText('aim + press the trigger as each note reaches the line', w/2, 85); labelTex.needsUpdate = true;
+  g.fillStyle = '#cbb8ff'; g.fillText('tap the circle as each note arrives · hold the trigger for long notes', w/2, 85); labelTex.needsUpdate = true;
 }
 // switch the highway, pads, notes and singers between 4 and 5 lanes
 function setLayout(n){
@@ -517,8 +517,8 @@ function drawMenu(){ const v = TIERS[venue], open = unlocked(venue); menu.redraw
 // ---------- tutorial: the first thing a new player sees; replay it from the menu (How to play, or H) ----------
 const TUT_KEY = 'purrfect-pitch-tutorial-v1';
 const TUT = [
-  ['Point and press', ['Aim at a lane on the note highway', 'and press the trigger (the back button).', 'The baton lights up while it is pressed.']],
-  ['Conduct the cats!', ['Press as each note reaches the line', 'in the lane you point at. Pressing where', 'there is no note breaks your combo.', 'Long notes: hold until the tail ends.', 'Double notes: use both batons.']],
+  ['Tap the circles', ['Bring the tip of your baton down onto', 'a coloured circle on the line,', "like a conductor's downbeat."]],
+  ['Conduct the cats!', ['Tap each circle as its note arrives.', 'Tapping where there is no note breaks', 'your combo. Long notes: hold the trigger', 'as you tap and keep holding: the baton', 'burns until the tail ends.']],
 ];
 let tutStep = 0, tutT = 0;
 function startTutorial(){ state = 'tutorial'; tutStep = 0; tutT = perfNow(); drawTutorial(); menu.mesh.visible = true; }
@@ -528,18 +528,12 @@ function drawTutorial(){ const [title, lines] = TUT[tutStep], last = tutStep ===
   g.fillStyle = '#ffc94d'; g.font = 'bold 72px system-ui'; g.fillText(title, W/2, 170);
   g.fillStyle = '#fff'; g.font = '40px system-ui'; lines.forEach((l, i) => g.fillText(l, W/2, 270 + i*60));
   g.fillStyle = '#8cff66'; g.font = 'bold 36px system-ui';
-  g.fillText(last ? 'Pull the trigger (or press D) to play your first song' : renderer.xr.isPresenting ? 'Do it to continue' : 'Press D to continue', W/2, 700);
+  g.fillText(last ? 'Tap a circle (or press D) to play your first song' : renderer.xr.isPresenting ? 'Tap a circle to continue' : 'Press D to continue', W/2, 700);
 }); }
 function tutNext(){
   tutT = perfNow(); if (++tutStep < TUT.length) return drawTutorial();
   try { localStorage.setItem(TUT_KEY, '1'); } catch {}
   applyVenue(0); startSong(0);
-}
-// in VR, step 1 advances by doing it (after a moment, so a trigger already held doesn't skip it)
-function checkTutorial(time){
-  if (state !== 'tutorial' || !renderer.xr.isPresenting || time - tutT < 1) return;
-  const ok = tutStep === 0 && ctrls.some(c => c.userData.src && c.userData.triggerDown && aimedLane(c) >= 0);
-  if (ok) tutNext();
 }
 // ---------- credits (menu button or C); any button or key goes back ----------
 const CREDITS = [
@@ -749,16 +743,8 @@ function aim(c){
   ray.ray.direction.copy(RAY_DIR.set(0, 0, -1).transformDirection(c.matrixWorld));
   return ray.ray;
 }
-function aimedLane(c){
-  const r = aim(c).clone().applyMatrix4(HWY_INV); // into the highway's own (untilted) space if (r.direction.y >= -0.01) return -1;
-  const x = r.origin.x + r.direction.x * (HY - r.origin.y) / r.direction.y;
-  if (Math.abs(x) > LANE_X[LANE_X.length-1] + 0.45) return -1; // aimed off the highway
-  let best = 0; LANE_X.forEach((lx, i) => { if (Math.abs(x - lx) < Math.abs(x - LANE_X[best])) best = i; });
-  return best;
-}
-const DWELL = 0.09; // s a long note forgives the baton wobbling off its lane
 function trigger(c){
-  if (state === 'play' && !paused) { const l = aimedLane(c); if (l >= 0) { c.userData.lane = l; press(l, c); } return; }
+  if (state === 'play' && !paused) return; // notes are tapped with the baton; the trigger only holds long notes
   if (state === 'tutorial') { if (tutStep === TUT.length - 1) tutNext(); return; }
   aim(c); const hit = ray.intersectObject(menu.mesh)[0]; if (!hit) return;
   const y = (1 - hit.uv.y) * MENU_H, x = hit.uv.x * 1024;
@@ -781,7 +767,7 @@ const ctrls = [0, 1].map(i => {
   c.userData.tip = add(SPH, basic(0xffffff), 0, 0, -0.3, c); c.userData.tip.scale.setScalar(0.015);
   const paw = makePaw(THREE); c.add(paw); // white-gloved cat paw holding the baton
   c.userData.beans = paw.userData.beans; c.userData.beanT = -9; c.userData.beanColor = new THREE.Color();
-  c.userData.prevTip = new THREE.Vector3(); c.userData.vy = 0; c.userData.flickT = -9; c.userData.aimLane = -1; c.userData.aimSince = 0;
+  c.userData.prevTip = new THREE.Vector3(); c.userData.vy = 0; c.userData.flickT = -9; c.userData.prevLoc = new THREE.Vector3(0, 9, 0); c.userData.strikeT = -9;
   rig.add(c);
   c.userData.cursor = add(new THREE.RingGeometry(0.06, 0.09, 24).rotateX(-Math.PI/2), basic(0xffffff, { transparent:true, opacity:0.8, side:THREE.DoubleSide }), 0, HY+0.05, HIT_Z);
   return c;
@@ -796,6 +782,9 @@ hwy.updateMatrixWorld(true); const HWY_INV = hwyIn.matrixWorld.clone().invert();
 // ---------- loop ----------
 const M = new THREE.Matrix4(), base = new THREE.Matrix4(), V = new THREE.Vector3(), RZ = new THREE.Matrix4(), TIP = new THREE.Vector3(), TMP_C = new THREE.Color();
 const FLICK_VY = 0.6;      // m/s upward baton speed that counts as a conducting stroke
+const STRIKE_Z = 0.25;     // m either side of the hit line where a downbeat counts
+const LOC = new THREE.Vector3(), GOLD = new THREE.Color('#ffd27a'), FIRE = ['#ff3d00', '#ff9100', '#ffd54f'].map(c => new THREE.Color(c));
+const laneAt = x => LANE_X.findIndex(lx => Math.abs(x - lx) < 0.16); // which circle a highway x is over, or -1
 const PAUSE_BUTTONS = [4, 5, 6, 7, 8, 9, 10, 11, 12]; // A/B/X/Y and any extra (e.g. menu) buttons the browser exposes
 let lastTime = perfNow();
 function maestro(c, time, dt){
@@ -806,7 +795,14 @@ function maestro(c, time, dt){
   u.tip.getWorldPosition(TIP);
   u.vy = 0.3*u.vy + 0.7*(TIP.y - u.prevTip.y)/Math.max(dt, 1e-3); u.prevTip.copy(TIP);
   u.tip.scale.setScalar((u.triggerDown ? 0.03 : 0.015) + 0.03*Math.max(0, 1 - (time - u.flickT)/0.25)); // tip flashes on every stroke
-  const al = aimedLane(c); if (al !== u.aimLane) { u.aimLane = al; u.aimSince = time; }
+  // the downbeat: the baton tip coming down through a circle on the hit line plays that lane's note
+  const loc = LOC.copy(TIP).applyMatrix4(HWY_INV), was = u.prevLoc, PAD_Y = HY + 0.03;
+  if (was.y > PAD_Y && loc.y <= PAD_Y && Math.abs(loc.z - HIT_Z) < STRIKE_Z && time - u.strikeT > 0.1) {
+    const lane = laneAt(loc.x);
+    if (lane >= 0) { u.strikeT = time; gp.hapticActuators?.[0]?.pulse?.(0.3, 15);
+      if (!paused && (state === 'play' || state === 'tutorial')) press(lane, c, !!u.triggerDown); } // trigger held = keep singing a long note
+  }
+  was.copy(loc);
   if (state !== 'play' || paused) return;
   // an upward stroke flashes the tip and buzzes: feel for the beat (notes are sung by trigger + aim)
   if (u.vy > FLICK_VY && time - u.flickT > 0.18){
@@ -819,18 +815,21 @@ function tick(){
   let beatPos = time*1.5, exc = 0.06;
   if (renderer.xr.isPresenting && needCalib > 0 && --needCalib === 0) calibrate();
   ctrls.forEach(c => { maestro(c, time, dt);
-    c.userData.baton.material.emissive.setHex(c.userData.triggerDown ? 0xfff0b0 : 0); // lit = trigger down
+    const u = c.userData, holding = state === 'play' && S.holds.some(h => h?.ctrl === c), k = state === 'play' ? Math.min(S.combo, 40)/40 : 0;
+    if (holding) u.baton.material.emissive.setRGB(1, 0.35 + 0.3*Math.random(), 0.05); // on fire while holding a long note
+    else u.baton.material.emissive.setRGB(1, 0.8, 0.3).multiplyScalar(k*(0.6 + 0.4*Math.sin(time*10)) + (u.triggerDown ? 0.25 : 0)); // gold hype with the combo
+    if (u.src && k > 0.5 && Math.random() < k - 0.4) spark(u.tip.getWorldPosition(TIP), GOLD);
     c.userData.beans.emissive.copy(c.userData.beanColor).multiplyScalar(0.9*Math.max(0, 1 - (time - c.userData.beanT)/0.4)); });
-  updateSparks(dt); VENUES[venue].update(time, dt); checkTutorial(time);
+  updateSparks(dt); VENUES[venue].update(time, dt);
   if (state === 'play' && paused) beatPos = beatAt(S.segs, songNow() - S.t0);
   else if (state === 'play'){
     scheduleBacking();
     const now = songNow(), st = now - S.t0; beatPos = beatAt(S.segs, st); exc = 0.12 + Math.min(S.combo, 40)/40*0.3;
     S.holds.forEach((h, lane) => { if (!h) return;
-      const hu = h.ctrl?.userData; if (hu && hu.aimLane !== lane && time - hu.aimSince > DWELL) { release(lane); return; } // a long note needs the baton kept on its lane
       band[lane].userData.singT = time; pads[lane].userData.glow = 1; drawTail(h.n, 0, now);
       const from = h.ctrl ? h.ctrl.userData.tip.getWorldPosition(TIP) : pads[lane].getWorldPosition(TIP); // the special effect
-      for (let k=0; k<3; k++) spark(from, LANES[lane]);
+      if (h.ctrl) for (let k=0; k<4; k++) smallFx.emit(from, FIRE[k % 3], rnd(-0.08, 0.08), rnd(0.3, 0.8), rnd(-0.08, 0.08), rnd(0.3, 0.6), -0.5); // the baton burns
+      else for (let k=0; k<3; k++) spark(from, LANES[lane]);
       if (now >= h.n.end) finishHold(lane, true); });
     for (const n of S.notes){
       if (n.missed) { const k = now - n.time; n.mesh.visible = k < 0.5; if (k < 0.5) n.mesh.position.z = HIT_Z + k*SPEED; continue; }
@@ -892,7 +891,8 @@ function tick(){
   bursts.forEach(b => { const k = (time - b.userData.t)/0.35; b.visible = k < 1; if (k < 1) { b.scale.setScalar(1 + k*1.5); b.material.opacity = 1 - k; } });
   const jk = time - judgeT; judge.mesh.material.opacity = Math.max(0, 1 - jk/0.7); judge.mesh.position.y = HIT_Y + 0.3 + jk*0.1;
 
-  ctrls.forEach(c => { const l = c.userData.src && (state === 'play' || state === 'tutorial') ? aimedLane(c) : -1, cur = c.userData.cursor;
+  ctrls.forEach(c => { const u = c.userData, cur = u.cursor, loc = u.prevLoc;
+    const l = u.src && (state === 'play' || state === 'tutorial') && Math.abs(loc.z - HIT_Z) < 0.35 && loc.y - HY < 0.5 ? laneAt(loc.x) : -1;
     cur.visible = l >= 0; if (l >= 0) { cur.position.x = LANE_X[l]; cur.material.color.copy(LANES[l]); } });
   if (!renderer.xr.isPresenting) camera.rotation.set(pitch, -yaw, 0, 'YXZ');
   renderer.render(scene, camera);
@@ -905,6 +905,7 @@ renderer.setAnimationLoop(tick);
 
 // self-check (full song checks live in the offline song validator)
 console.assert(SONGS.length === TIERS.length*4, 'four songs per venue');
+console.assert((p => laneAt(p.x) === 0 && Math.abs(p.y - HY) < 1e-6 && Math.abs(p.z - HIT_Z) < 1e-6)(hwyIn.localToWorld(new THREE.Vector3(LANE_X[0], HY, HIT_Z)).applyMatrix4(HWY_INV)), 'downbeat maths: hit line maps back to the pads');
 </script>
 </body>
 </html>
