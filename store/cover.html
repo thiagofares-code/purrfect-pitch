@@ -1,10 +1,69 @@
 <!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0b0716;font-family:"Segoe UI",system-ui,sans-serif}
-.bg{position:absolute;inset:0;background:url(screenshot-5-stadium.png) center 40%/cover}
-.shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,7,22,.15) 0%,rgba(11,7,22,.2) 45%,rgba(11,7,22,.88) 100%)}
-.t{position:absolute;left:0;right:0;bottom:8%;text-align:center;color:#fff}
-h1{margin:0;font-weight:900;font-size:min(13vw,22vh);letter-spacing:-.02em;line-height:1;text-shadow:0 .04em .12em rgba(0,0,0,.6)}
+/* store cover art: rendered at each store size by a headless browser (see the store image script) */
+html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif}
+body{background:radial-gradient(ellipse 45% 75% at var(--sx,50%) 0%,rgba(255,236,190,.28),rgba(255,236,190,0) 70%),
+  radial-gradient(ellipse at 50% 120%,#3a1030 0%,#160822 55%,#0b0716 100%)}
+.curtain{position:absolute;top:0;bottom:0;width:11%;background:repeating-linear-gradient(90deg,#5a0d1e 0 3vh,#8e1630 3vh 6vh,#5a0d1e 6vh 9vh);box-shadow:inset 0 0 6vh rgba(0,0,0,.7)}
+.curtain.l{left:0;border-bottom-right-radius:60% 20%}.curtain.r{right:0;border-bottom-left-radius:60% 20%}
+.wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:2vw}
+svg{height:96vh;flex:none;overflow:visible}
+.t{color:#fff;text-align:center}
+h1{margin:0;font-weight:900;font-size:11.5vh;letter-spacing:-.02em;line-height:1;text-shadow:0 .05em .15em rgba(0,0,0,.6)}
 h1 span{color:#ffc94d}
-p{margin:.4em 0 0;font-size:min(3.6vw,6vh);font-weight:600;color:#e7dcff;text-shadow:0 2px 10px rgba(0,0,0,.7)}
-</style></head><body><div class="bg"></div><div class="shade"></div>
-<div class="t"><h1>Purr<span>f</span>ect Pitch</h1><p>Conduct the cat choir through the classics</p></div></body></html>
+p{margin:.35em 0 0;font-size:4.2vh;font-weight:600;color:#e7dcff}
+/* tall and square covers: maestro above the title */
+@media (max-aspect-ratio: 3/2){ .wrap{flex-direction:column;gap:0} svg{height:auto;width:min(80vw,54vh)} h1{font-size:min(14vw,9vh)} p{font-size:min(4vw,2.8vh)} .curtain{width:8%} }
+</style></head><body>
+<div class="curtain l"></div><div class="curtain r"></div>
+<div class="wrap">
+<svg viewBox="0 0 600 760" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="14"/></filter>
+    <g id="note" fill="#ffc94d"><rect x="10" y="-46" width="6" height="46" rx="2"/><path d="M16 -46 Q38 -38 34 -16 Q28 -30 16 -30Z"/><ellipse cx="4" cy="0" rx="13" ry="9" transform="rotate(-20 4 0)"/></g>
+  </defs>
+  <!-- the batons glow gold, as in the game on a big combo: a soft halo along each baton and round its tip -->
+  <g filter="url(#glow)" opacity=".85">
+    <line x1="104" y1="300" x2="52" y2="118" stroke="#ffc94d" stroke-width="30" stroke-linecap="round"/>
+    <line x1="496" y1="300" x2="548" y2="118" stroke="#ffc94d" stroke-width="30" stroke-linecap="round"/>
+    <circle cx="52" cy="118" r="46" fill="#ffe9a8"/><circle cx="548" cy="118" r="46" fill="#ffe9a8"/></g>
+  <!-- raised arms (tuxedo sleeves) -->
+  <path d="M178 600 Q118 470 104 335" stroke="#17141f" stroke-width="74" stroke-linecap="round" fill="none"/>
+  <path d="M422 600 Q482 470 496 335" stroke="#17141f" stroke-width="74" stroke-linecap="round" fill="none"/>
+  <!-- batons, then the white-gloved paws holding them -->
+  <line x1="104" y1="300" x2="52" y2="118" stroke="#fff6d8" stroke-width="9" stroke-linecap="round"/>
+  <line x1="496" y1="300" x2="548" y2="118" stroke="#fff6d8" stroke-width="9" stroke-linecap="round"/>
+  <g fill="#fbfaf6"><ellipse cx="104" cy="338" rx="44" ry="20" transform="rotate(-12 104 338)"/><circle cx="102" cy="300" r="34"/>
+    <circle cx="80" cy="278" r="13"/><circle cx="98" cy="268" r="13"/><circle cx="118" cy="272" r="12"/>
+    <ellipse cx="496" cy="338" rx="44" ry="20" transform="rotate(12 496 338)"/><circle cx="498" cy="300" r="34"/>
+    <circle cx="520" cy="278" r="13"/><circle cx="502" cy="268" r="13"/><circle cx="482" cy="272" r="12"/></g>
+  <circle cx="52" cy="118" r="11" fill="#fff"/><circle cx="548" cy="118" r="11" fill="#fff"/>
+  <g fill="#ffd54f"><circle cx="20" cy="40" r="4"/><circle cx="88" cy="22" r="3"/><circle cx="104" cy="70" r="3"/><circle cx="580" cy="40" r="4"/><circle cx="512" cy="22" r="3"/><circle cx="496" cy="70" r="3"/></g>
+  <!-- tuxedo -->
+  <path d="M118 760 L148 572 Q300 508 452 572 L482 760Z" fill="#17141f"/>
+  <path d="M252 540 L300 650 L348 540 Q300 524 252 540Z" fill="#f5f2ea"/>
+  <path d="M252 540 L300 650 L252 760 L200 760 L212 566Z" fill="#2a2636"/>
+  <path d="M348 540 L300 650 L348 760 L400 760 L388 566Z" fill="#2a2636"/>
+  <circle cx="300" cy="606" r="5" fill="#17141f"/><circle cx="300" cy="630" r="5" fill="#17141f"/>
+  <ellipse cx="300" cy="526" rx="62" ry="24" fill="#f5f2ea"/>
+  <g fill="#c8102e"><path d="M300 548 L258 528 L258 568Z"/><path d="M300 548 L342 528 L342 568Z"/><circle cx="300" cy="548" r="10"/></g>
+  <!-- head: a ginger cat, eyes closed, lost in the music -->
+  <path d="M214 372 L230 262 L288 336Z" fill="#e8964a"/><path d="M386 372 L370 262 L312 336Z" fill="#e8964a"/>
+  <path d="M232 350 L240 290 L272 334Z" fill="#ff9db5"/><path d="M368 350 L360 290 L328 334Z" fill="#ff9db5"/>
+  <ellipse cx="300" cy="410" rx="108" ry="94" fill="#e8964a"/>
+  <g fill="#c96f2a"><path d="M282 322 Q290 350 286 370 Q276 350 282 322Z"/><path d="M300 318 Q306 350 300 374 Q294 350 300 318Z"/><path d="M318 322 Q310 350 314 370 Q324 350 318 322Z"/></g>
+  <ellipse cx="300" cy="452" rx="58" ry="40" fill="#f6d3a8"/>
+  <g stroke="#2a1a12" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M242 404 Q260 390 278 404"/><path d="M322 404 Q340 390 358 404"/>
+    <path d="M240 378 Q258 366 276 374" stroke-width="5"/><path d="M324 374 Q342 366 360 378" stroke-width="5"/>
+  </g>
+  <path d="M290 432 L310 432 L300 444Z" fill="#ff5fa2"/>
+  <path d="M300 444 L300 452 M286 456 Q300 470 314 456" stroke="#2a1a12" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <g stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".85">
+    <path d="M250 446 L196 438"/><path d="M250 456 L198 462"/><path d="M350 446 L404 438"/><path d="M350 456 L402 462"/></g>
+  <!-- music in the air -->
+  <use href="#note" transform="translate(170 180) rotate(-10)"/><use href="#note" transform="translate(420 200) rotate(12) scale(.8)"/>
+  <use href="#note" transform="translate(300 230) scale(.7)"/>
+</svg>
+<div class="t"><h1>Purr<span>f</span>ect<br>Pitch</h1><p>Conduct the cat choir through the classics</p></div>
+</div>
+</body></html>
