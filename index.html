@@ -28,7 +28,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v28'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v29'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -99,24 +99,16 @@ function boom(at){ // firework: a low thump and a crackle, from where it burst
 // the choir: five cats, one per lane slot, each pre-tuned onto every note in its range (tools/tune.py:
 // Praat PSOLA, all within 8 cents of the note). A note plays from its lane's own cat when that cat covers
 // it, otherwise from the nearest cat that does. The synth is the fallback while samples load.
-const VOICE_DEFS = [ // slot order = lane colours: pink, yellow, purple soloist, cyan, green
-  { name:'tom',     natural:68.3, lo:62, hi:74 }, // "Grumpy", picked on audition.html
-  { name:'ribs',    natural:76.0, lo:68, hi:84 }, // "Kitten B"
-  { name:'soloist', natural:80.1, lo:72, hi:91 }, // "Cartoon kitten"
-  { name:'mitten',  natural:74.5, lo:67, hi:83 },
-  { name:'kitty',   natural:78.5, lo:70, hi:91 },
-];
-const SAMPLES = {}; // 'tom_65' -> { key, midi, offset, dur, buf, loop }; 'tom_65_s' is the same note as a quick 0.32 s "mew"
-const SHORT_NOTE = 0.55; // seconds: notes this short sing the whole quick mew instead of the start of a long meow
-const XS_NOTE = 0.32;    // and notes this short the quickest one ('_xs', 0.2 s)
+// the choir's voice: one clean, untouched meow (Pixabay, dragon-studio kitten), played faster or slower per note like a
+// sampler, so it sings cute instead of re-synthesised and robotic (picked by ear on the meow-style test, B1)
+const VOICE_DEFS = [{ name:'meow', file:'sounds/meow.mp3', natural:75.26 }];
+const SAMPLES = {}; // name -> { key, midi, offset, dur, buf, loop }
 const catPanners = [], voices = []; // per choir cat: its fixed 3D position, and the note it is singing
 const catPanner = (slot, at) => catPanners[slot] ||= (p => (p.connect(voiceBus), p))(panner(at, 2, true));
 const track = (slot, v) => (slot >= 0 && (voices[slot] = v), v);
 function loadVoices(){
-  for (const v of VOICE_DEFS) for (let m = v.lo; m <= v.hi; m++) for (const sfx of ['', '_s', '_xs']) {
-    const key = `${v.name}_${m}`;
-    fetch(`sounds/tuned/${key}${sfx}.mp3`).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => {
-      const s = { key, midi:m, offset:0, dur:buf.duration }; if (!sfx) s.loop = makeLoop(s, buf); s.buf = buf; SAMPLES[key + sfx] = s; }).catch(() => {}); }
+  for (const v of VOICE_DEFS) fetch(v.file).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => {
+    const s = { key: v.name, midi: v.natural, offset: 0, dur: buf.duration }; s.loop = makeLoop(s, buf); s.buf = buf; SAMPLES[v.name] = s; }).catch(() => {});
 }
 // sustain loop for held notes: a whole number of pitch cycles from the middle of the vowel, with its end
 // trimmed to match its start and crossfaded into the samples just before it, so repeating it has no seam
@@ -130,13 +122,7 @@ function makeLoop(v, buf){
   for (let j=0;j<C;j++){ const w = j/C; o[L-C+j] = d[at+L-C+j]*(1-w) + d[at-C+j]*w; }
   return out;
 }
-function pickVoice(m, slot = -1){
-  const order = VOICE_DEFS.map((v, g) => ({ v, g })).sort((a, b) => (b.g === slot) - (a.g === slot) || Math.abs(m - a.v.natural) - Math.abs(m - b.v.natural));
-  for (const { v } of order) if (m >= v.lo && m <= v.hi && SAMPLES[`${v.name}_${m}`]) return SAMPLES[`${v.name}_${m}`];
-  let best = null, d = Infinity; // outside every range: nearest rendered note, pitch-shifted
-  for (const [k, s] of Object.entries(SAMPLES)) if (!/_x?s$/.test(k) && Math.abs(s.midi - m) < d) { d = Math.abs(s.midi - m); best = s; }
-  return best;
-}
+const pickVoice = () => SAMPLES.meow || null; // every cat sings the same meow, pitched to its note
 // octave that keeps a melody closest to the cats' natural range (synth uses it too, so both sound alike)
 function bestShift(notes){
   const roots = VOICE_DEFS.map(v => v.natural), cost = k => notes.reduce((s, n) => s + Math.min(...roots.map(r => Math.abs(n.midi + k - r))), 0);
@@ -145,8 +131,8 @@ function bestShift(notes){
 // slot = which choir cat sings (its sound comes from that cat); at = any other spot (e.g. a cat in the crowd)
 function meow(m, t, len, vol=0.3, slot=-1, at=null){
   const f = hz(m), g = ctx.createGain(), srcs = [], v = pickVoice(m, slot);
-  // short notes sing a whole quick "m-ee-ow" and let it finish, so a fast run is sung, not beeped
-  const mew = v && len <= SHORT_NOTE && (len <= XS_NOTE && SAMPLES[v.key + '_xs'] || SAMPLES[v.key + '_s']);
+  // a note shorter than the meow sings the whole meow and lets it ring (the next note glides in), so it's sung, not beeped
+  const mew = v && len <= v.dur * hz(v.midi) / f + 0.05 ? v : null;
   if (mew) len = Math.max(len, mew.buf.duration * hz(v.midi) / f);
   const tail = mew ? 0.04 : Math.min(0.35, len*0.45); // soft release
   // legato: if this cat is still singing (or just stopped), it glides into the new note: no fresh "m", the old one crossfades out
@@ -167,8 +153,7 @@ function meow(m, t, len, vol=0.3, slot=-1, at=null){
     };
     const A = 0.45, T = 0.4; // share of the take used as the "mee" attack and the "ow" ending
     const attackReal = v.dur*A / rate, tailReal = v.dur*T / rate;
-    if (mew) { const s = ctx.createBufferSource(); s.buffer = mew.buf; s.playbackRate.value = rate; s.connect(boost); s.start(t, skip*rate); srcs.push(s); } // the whole "m-ee-ow", quick
-    else if (len <= v.dur / rate + 0.05) piece(t, v.offset + skip*rate, Math.min(v.dur, len*rate) - skip*rate, 0, 0.03);
+    if (mew) { const s = ctx.createBufferSource(); s.buffer = mew.buf; s.playbackRate.value = rate; s.connect(boost); s.start(t, skip*rate); srcs.push(s); } // the whole "m-ee-ow"
     else {
       // held note: "mee" attack, then a seamless pitch-cycle loop of the vowel ("eeee") with vibrato, then the real "ow"
       const X = 0.05, loopAt = t + attackReal - skip - X, tailAt = t + len - tailReal;
