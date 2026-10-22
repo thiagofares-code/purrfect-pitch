@@ -24,11 +24,11 @@ Quest: Enter VR · sweep your baton through each circle (up or down) as its note
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor, chordAt } from './songs.js?v=15';
+import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor, chordAt, PRACTICE } from './songs.js?v=16';
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v29'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v30'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -101,7 +101,7 @@ function boom(at){ // firework: a low thump and a crackle, from where it burst
 // it, otherwise from the nearest cat that does. The synth is the fallback while samples load.
 // the choir's voice: one clean, untouched meow (Pixabay, dragon-studio kitten), played faster or slower per note like a
 // sampler, so it sings cute instead of re-synthesised and robotic (picked by ear on the meow-style test, B1)
-const VOICE_DEFS = [{ name:'meow', file:'sounds/meow.mp3', natural:75.26 }];
+const VOICE_DEFS = [{ name:'meow', file:'sounds/meow.mp3', natural:75.26 }, { name:'high', file:'sounds/meow-high.mp3', natural:78.5 }]; // high: freesound kitty, for the top notes
 const SAMPLES = {}; // name -> { key, midi, offset, dur, buf, loop }
 const catPanners = [], voices = []; // per choir cat: its fixed 3D position, and the note it is singing
 const catPanner = (slot, at) => catPanners[slot] ||= (p => (p.connect(voiceBus), p))(panner(at, 2, true));
@@ -122,7 +122,8 @@ function makeLoop(v, buf){
   for (let j=0;j<C;j++){ const w = j/C; o[L-C+j] = d[at+L-C+j]*(1-w) + d[at-C+j]*w; }
   return out;
 }
-const pickVoice = () => SAMPLES.meow || null; // every cat sings the same meow, pitched to its note
+// the loaded meow naturally closest to the note, so it is pitched as little as possible (a sampler's multi-sampling)
+const pickVoice = m => Object.values(SAMPLES).reduce((a, s) => !a || Math.abs(m - s.midi) < Math.abs(m - a.midi) ? s : a, null);
 // octave that keeps a melody closest to the cats' natural range (synth uses it too, so both sound alike)
 function bestShift(notes){
   const roots = VOICE_DEFS.map(v => v.natural), cost = k => notes.reduce((s, n) => s + Math.min(...roots.map(r => Math.abs(n.midi + k - r))), 0);
@@ -516,12 +517,12 @@ function drawTutorial(){ const [title, lines] = TUT[tutStep], last = tutStep ===
   g.fillStyle = '#ffc94d'; g.font = 'bold 72px system-ui'; g.fillText(title, W/2, 170);
   g.fillStyle = '#fff'; g.font = '40px system-ui'; lines.forEach((l, i) => g.fillText(l, W/2, 270 + i*60));
   g.fillStyle = '#8cff66'; g.font = 'bold 36px system-ui';
-  g.fillText(last ? 'Sweep through a circle (or press D) to play your first song' : renderer.xr.isPresenting ? 'Sweep through a circle to continue' : 'Press D to continue', W/2, 700);
+  g.fillText(last ? 'Sweep through a circle (or press D) to start practising' : renderer.xr.isPresenting ? 'Sweep through a circle to continue' : 'Press D to continue', W/2, 700);
 }); }
 function tutNext(){
   tutT = perfNow(); if (++tutStep < TUT.length) return drawTutorial();
   try { localStorage.setItem(TUT_KEY, '1'); } catch {}
-  applyVenue(0); startSong(0);
+  applyVenue(0); startSong(-1, PRACTICE);
 }
 // ---------- credits (menu button or C); any button or key goes back ----------
 const CREDITS = [
@@ -545,7 +546,7 @@ function changeVenue(d){ const k = venue + d; if (k < 0 || k >= TIERS.length) re
 function pickSong(i){ if (unlocked(venue)) startSong(venue*4 + i); }
 function drawHud(){ hud.redraw((g, W, H) => {
   box(g, 0, 0, W, H, 30, 'rgba(20,10,35,0.75)');
-  g.fillStyle = '#fff'; g.textAlign = 'left'; g.font = 'bold 38px system-ui'; g.fillText(S.song.title, 30, 52);
+  g.fillStyle = '#fff'; g.textAlign = 'left'; g.font = 'bold 38px system-ui'; g.fillText(S.song.hints?.[S.segIdx - 1] ?? S.song.title, 30, 52); // practice shows what to do now
   g.font = 'bold 72px system-ui'; g.fillText(S.score.toLocaleString(), 30, 140);
   g.textAlign = 'right'; g.font = 'bold 54px system-ui'; g.fillStyle = S.combo >= 10 ? '#ffc94d' : '#fff'; g.fillText(`${S.combo} combo`, W-30, 85);
   g.font = '36px system-ui'; g.fillStyle = '#cbb8ff'; g.fillText(`x${mult()}`, W-30, 140);
@@ -603,10 +604,10 @@ function showJudge(text, color){
     g.strokeText(text, W/2, 95); g.fillStyle = color; g.fillText(text, W/2, 95); });
   judgeT = perfNow();
 }
-function startSong(i){
+function startSong(i, song = SONGS[i]){ // i = -1: the tutorial's practice (4 lanes, no doubles, can't fail, not saved)
   initAudio(); lat = ctx.outputLatency || ctx.baseLatency || 0;
-  const song = SONGS[i], p = parseSong(song, difficultyFor(i)), t0 = ctx.currentTime + LEAD;
-  clearNotes(); setLayout(lanesFor(i));
+  const p = parseSong(song, i < 0 ? { lanes: 4 } : difficultyFor(i)), t0 = ctx.currentTime + LEAD;
+  clearNotes(); setLayout(i < 0 ? 4 : lanesFor(i));
   const notes = p.notes.map(n => { const mesh = new THREE.Mesh(noteGeo, noteMats[n.lane]);
     mesh.rotation.x = -Math.PI/2 + 0.35; mesh.visible = false; noteGroup.add(mesh);
     const time = t0 + n.t, hold = n.secs >= HOLD_MIN;
@@ -631,7 +632,7 @@ function endSong(){
   S.acc = (S.perfect + S.good*0.5) / S.notes.length;
   S.stars = S.acc >= 0.9 ? 3 : S.acc >= 0.7 ? 2 : S.acc >= 0.4 ? 1 : 0;
   const k = Math.floor(S.idx/4), wasOpen = unlocked(k+1), prev = best[S.song.title];
-  best[S.song.title] = { stars: Math.max(S.stars, prev?.stars || 0), score: Math.max(S.score, prev?.score || 0) }; saveBest();
+  if (S.idx >= 0) { best[S.song.title] = { stars: Math.max(S.stars, prev?.stars || 0), score: Math.max(S.score, prev?.score || 0) }; saveBest(); }
   S.newVenue = k+1 < TIERS.length && !wasOpen && unlocked(k+1);
   S.newBest = !prev || S.score > prev.score;
   state = 'results'; clearNotes(); applause(); cheerUntil = perfNow() + 4; drawResults(); menu.mesh.visible = true;
@@ -653,7 +654,7 @@ const MISS_MAT = basic(0xff2a2a, { map:pawTex, transparent:true });
 // crowd meter (0-1): hits fill it, misses drain it (gentler in the early venues); empty and the crowd boos you off
 const METER_START = 1, METER_HIT = 0.03, meterDrain = () => 0.03 + 0.005*venue;
 function miss(n){ lastMissT = perfNow(); n.judged = n.missed = true; n.mesh.material = MISS_MAT; if (n.tail) n.tail.visible = false;
-  S.combo = 0; S.miss++; S.meter -= meterDrain(); showJudge('MISS', '#ff6b6b'); drawHud(); if (S.meter <= 0) failSong(); }
+  S.combo = 0; S.miss++; S.meter -= meterDrain(); showJudge('MISS', '#ff6b6b'); drawHud(); if (S.meter <= 0 && S.idx >= 0) failSong(); }
 function failSong(){
   S.failed = true; S.stars = 0; state = 'results'; clearNotes(); cheerUntil = 0; showJudge('BOOOO!', '#ff4d4d'); drawResults(); menu.mesh.visible = true;
 }

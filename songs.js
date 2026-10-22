@@ -36,9 +36,14 @@ export function chord(tok){
 const tokens = s => s.trim().split(/\s+/).map(t => { const [n, d] = t.split(':'); return [n, d ? +d : 1]; });
 
 // -> notes with beat, dur (beats), t / secs (seconds from song start), midi, lane; tempo segments; chord timeline
+// the tutorial's practice: one section per skill, 4 pitches = lanes 1-4 in order; hints[i] shows during form[i]
+export const PRACTICE = { title:'Practice', composer:'', bpm:80, bar:4, hat:1, pickup:0, form:'ABCD', once:true,
+  hints:['Three notes on the same circle', 'Back and forth: circles 1 and 2', 'All four: 1 2 3 4', 'Long notes: hold the trigger as you sweep'],
+  parts:{ A:'R:4 C4 R C4 R C4 R R:2', B:'C4 R D4 R C4 R D4 R R:2', C:'C4 R D4 R E4 R F4 R R:2', D:'C4:3 R D4:3 R E4:3 R:3' },
+  chords:{ A:'C:12', B:'C:10', C:'G:10', D:'C:14' } };
 export function parseSong(song, { lanes = 4, doubles = 0 } = {}){
   const notes = [], segs = [], chords = []; let beat = 0, t = 0;
-  for (let r = 0; t < TARGET_SECS; r++){
+  for (let r = 0; r === 0 || (!song.once && t < TARGET_SECS); r++){ // once: play the form a single time (practice)
     for (const key of song.form){
       const spb = 60 / (song.bpm * (song.tempo?.[key] || 1) * Math.min(2, (song.accel || 1) ** r));
       segs.push({ b: beat, t, spb });
