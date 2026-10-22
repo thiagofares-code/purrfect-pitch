@@ -28,7 +28,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v25'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v26'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -57,7 +57,7 @@ let ctx, master, voiceBus, noise, lat = 0;
 const PITCH_UP = 3; // semitones: the choir sings a little above the written melody
 function initAudio(){
   if (ctx) { ctx.resume(); return; }
-  ctx = new AudioContext();
+  ctx = new AudioContext({ latencyHint: 0.05 }); // 50 ms buffers: no crackle on the Quest, still quick enough for cues; songNow() subtracts it
   master = ctx.createGain(); master.gain.value = 0.6;
   master.connect(ctx.createDynamicsCompressor()).connect(ctx.destination);
   // voices: brighter top end plus a short stage reverb so the choir sounds live
@@ -77,9 +77,10 @@ function initAudio(){
   placeMurmur(); loadVoices();
 }
 let backing, murmur = []; // backing = the venue's instrumental band (band.js)
-// a 3D sound source: HRTF panning plus distance, heard from wherever the headset is
-function panner(at, ref = 2){
-  const p = ctx.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = ref; p.rolloffFactor = 1;
+// a 3D sound source with distance, heard from wherever the headset is. HRTF (true 3D) is costly on the Quest, so only
+// the 5 singing cats get it; the band, crowd and fireworks use cheap left/right panning
+function panner(at, ref = 2, hrtf = false){
+  const p = ctx.createPanner(); p.panningModel = hrtf ? 'HRTF' : 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = ref; p.rolloffFactor = 1;
   p.positionX.value = at.x; p.positionY.value = at.y; p.positionZ.value = at.z; return p;
 }
 const crowdSpot = () => { const a = AUD[Math.random()*audCount|0]; return new THREE.Vector3(a.x, a.y + 0.8, a.z); };
@@ -109,7 +110,7 @@ const SAMPLES = {}; // 'tom_65' -> { key, midi, offset, dur, buf, loop }; 'tom_6
 const SHORT_NOTE = 0.55; // seconds: notes this short sing the whole quick mew instead of the start of a long meow
 const XS_NOTE = 0.32;    // and notes this short the quickest one ('_xs', 0.2 s)
 const catPanners = [], voices = []; // per choir cat: its fixed 3D position, and the note it is singing
-const catPanner = (slot, at) => catPanners[slot] ||= (p => (p.connect(voiceBus), p))(panner(at));
+const catPanner = (slot, at) => catPanners[slot] ||= (p => (p.connect(voiceBus), p))(panner(at, 2, true));
 const track = (slot, v) => (slot >= 0 && (voices[slot] = v), v);
 function loadVoices(){
   for (const v of VOICE_DEFS) for (let m = v.lo; m <= v.hi; m++) for (const sfx of ['', '_s', '_xs']) {
