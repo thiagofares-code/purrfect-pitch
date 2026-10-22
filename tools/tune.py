@@ -12,12 +12,13 @@ XS = 0.2          # seconds: the quickest whole "m-ee-ow", for very fast passage
 VOICES = [  # name, source wav, meow start/len (s, from the grader), natural pitch (MIDI), notes to render, shape
     # shape = semitones of the cat's own "m-ee-ow" pitch curve to keep, with the held middle locked onto the note
     # (None = flatten to the note, as before). Flattening a strongly shaped meow turns it into a robotic "meh".
-    # pink, yellow and purple voices were picked by ear on audition.html; they keep their whole natural curve (99)
-    ('tom',     'alex_jauk-cat-meow-noise-438008.wav',          0.13, 0.62, 68.3, range(62, 75), 99),  # "Grumpy"
-    ('ribs',    'dragon-studio-kitten-sfx-405457.wav',          0.03, 0.78, 76.0, range(68, 85), 99),  # "Kitten B"
-    ('mitten',  'sound_garage-cat-meow-10-fx-306188.wav',       0.09, 1.36, 74.5, range(67, 84), None),
-    ('soloist', 'dragon-studio-cartoon-kitten-meow-487668.wav', 0.05, 1.59, 80.1, range(72, 92), 99),  # "Cartoon kitten"
-    ('kitty',   'freesound_community-kitty-meow-85182.wav',     0.04, 0.43, 78.5, range(70, 92), None),
+    # voices picked by ear on audition.html. Bongo-Cat style: every cat keeps just 1 semitone of its own curve (half on quick
+    # notes), so each meow lands on the note at once and sings the tune, with a little cat left in it
+    ('tom',     'alex_jauk-cat-meow-noise-438008.wav',          0.13, 0.62, 68.3, range(62, 75), 1.0),  # "Grumpy"
+    ('ribs',    'dragon-studio-kitten-sfx-405457.wav',          0.03, 0.78, 76.0, range(68, 85), 1.0),  # "Kitten B"
+    ('mitten',  'sound_garage-cat-meow-10-fx-306188.wav',       0.09, 1.36, 74.5, range(67, 84), 1.0),
+    ('soloist', 'dragon-studio-cartoon-kitten-meow-487668.wav', 0.05, 1.59, 80.1, range(72, 92), 1.0),  # "Cartoon kitten"
+    ('kitty',   'freesound_community-kitty-meow-85182.wav',     0.04, 0.43, 78.5, range(70, 92), 1.0),
 ]
 st = lambda f: 12 * np.log2(f / 440.0) + 69
 hz = lambda m: 440.0 * 2 ** ((m - 69) / 12)

@@ -28,7 +28,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v27'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v28'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -60,9 +60,9 @@ function initAudio(){
   ctx = new AudioContext({ latencyHint: 0.05 }); // 50 ms buffers: no crackle on the Quest, still quick enough for cues; songNow() subtracts it
   master = ctx.createGain(); master.gain.value = 0.6;
   master.connect(ctx.createDynamicsCompressor()).connect(ctx.destination);
-  // voices: brighter top end plus a short stage reverb so the choir sounds live
+  // voices: a touch of top end plus a short stage reverb so the choir sounds live
   voiceBus = ctx.createGain(); voiceBus.gain.value = 1.2;
-  const shelf = ctx.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = 2500; shelf.gain.value = 6;
+  const shelf = ctx.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = 2500; shelf.gain.value = 1; // +1 dB only: warmer, rounder meows (Bongo Cat-like; +6 sounded thin)
   const verb = ctx.createConvolver(), wet = ctx.createGain(), ir = ctx.createBuffer(2, ctx.sampleRate*1.6, ctx.sampleRate);
   for (let ch=0; ch<2; ch++){ const d = ir.getChannelData(ch); for (let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * (1 - i/d.length)**3; }
   verb.buffer = ir; wet.gain.value = 0.25;
@@ -149,9 +149,11 @@ function meow(m, t, len, vol=0.3, slot=-1, at=null){
   const mew = v && len <= SHORT_NOTE && (len <= XS_NOTE && SAMPLES[v.key + '_xs'] || SAMPLES[v.key + '_s']);
   if (mew) len = Math.max(len, mew.buf.duration * hz(v.midi) / f);
   const tail = mew ? 0.04 : Math.min(0.35, len*0.45); // soft release
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+(v ? 0.01 : 0.03)); g.gain.setValueAtTime(vol, t+len-tail); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
+  // legato: if this cat is still singing (or just stopped), it glides into the new note: no fresh "m", the old one crossfades out
+  const prev = slot >= 0 ? voices[slot] : null, legato = !!prev && prev.end > t - 0.08, skip = legato ? 0.04 : 0;
+  g.gain.setValueAtTime(legato ? vol*0.5 : 0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+(legato ? 0.04 : v ? 0.01 : 0.03)); g.gain.setValueAtTime(vol, t+len-tail); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
   const from = slot >= 0 ? allBand[slot].getWorldPosition(new THREE.Vector3()).setY(allBand[slot].position.y + 1) : at;
-  if (slot >= 0) { voices[slot]?.stop(t); g.connect(catPanner(slot, from)); } else if (from) g.connect(panner(from)).connect(voiceBus); else g.connect(voiceBus);
+  if (slot >= 0) { prev?.stop(t, legato ? 0.05 : 0.03); g.connect(catPanner(slot, from)); } else if (from) g.connect(panner(from)).connect(voiceBus); else g.connect(voiceBus);
   if (v){
     const rate = f / hz(v.midi), boost = ctx.createGain(); boost.gain.value = 2.5; boost.connect(g);
     const srcs = [];
@@ -165,23 +167,23 @@ function meow(m, t, len, vol=0.3, slot=-1, at=null){
     };
     const A = 0.45, T = 0.4; // share of the take used as the "mee" attack and the "ow" ending
     const attackReal = v.dur*A / rate, tailReal = v.dur*T / rate;
-    if (mew) { const s = ctx.createBufferSource(); s.buffer = mew.buf; s.playbackRate.value = rate; s.connect(boost); s.start(t); srcs.push(s); } // the whole "m-ee-ow", quick
-    else if (len <= v.dur / rate + 0.05) piece(t, v.offset, Math.min(v.dur, len*rate), 0, 0.03);
+    if (mew) { const s = ctx.createBufferSource(); s.buffer = mew.buf; s.playbackRate.value = rate; s.connect(boost); s.start(t, skip*rate); srcs.push(s); } // the whole "m-ee-ow", quick
+    else if (len <= v.dur / rate + 0.05) piece(t, v.offset + skip*rate, Math.min(v.dur, len*rate) - skip*rate, 0, 0.03);
     else {
       // held note: "mee" attack, then a seamless pitch-cycle loop of the vowel ("eeee") with vibrato, then the real "ow"
-      const X = 0.05, loopAt = t + attackReal - X, tailAt = t + len - tailReal;
-      piece(t, v.offset, v.dur*A, 0, X);
+      const X = 0.05, loopAt = t + attackReal - skip - X, tailAt = t + len - tailReal;
+      piece(t, v.offset + skip*rate, v.dur*A - skip*rate, 0, X);
       const s = ctx.createBufferSource(), e = ctx.createGain(), vib = ctx.createOscillator(), vg = ctx.createGain();
       s.buffer = v.loop; s.loop = true; s.playbackRate.value = rate;
-      vib.frequency.value = 5.5; vib.connect(vg).connect(s.detune); // vibrato grows in like a singer's, up to ±15 cents
-      vg.gain.setValueAtTime(0, loopAt); vg.gain.linearRampToValueAtTime(15, loopAt + 0.6);
+      vib.frequency.value = 5.5; vib.connect(vg).connect(s.detune); // vibrato grows in like a singer's, up to ±22 cents
+      vg.gain.setValueAtTime(0, loopAt); vg.gain.linearRampToValueAtTime(22, loopAt + 0.6);
       e.gain.setValueAtTime(0, loopAt); e.gain.linearRampToValueAtTime(1, loopAt + X);
-      e.gain.setValueAtTime(1, tailAt); e.gain.linearRampToValueAtTime(0, tailAt + X);
+      e.gain.linearRampToValueAtTime(1.3, tailAt); e.gain.linearRampToValueAtTime(0, tailAt + X); // swells while held
       s.connect(e).connect(boost);
       for (const n of [s, vib]) { n.start(loopAt); n.stop(tailAt + X + 0.02); srcs.push(n); }
       piece(tailAt, v.offset + v.dur*(1-T), v.dur*T, X, 0.03);
     }
-    return track(slot, { stop(at){ g.gain.cancelScheduledValues(at); g.gain.setTargetAtTime(0.0001, at, 0.03); srcs.forEach(s => { try { s.stop(at+0.2); } catch {} }); } });
+    return track(slot, { end: t + len, stop(at, tau = 0.03){ g.gain.cancelScheduledValues(at); g.gain.setTargetAtTime(0.0001, at, tau); srcs.forEach(s => { try { s.stop(at+0.2); } catch {} }); } });
   } else {
     const filt = ctx.createBiquadFilter(), lfo = ctx.createOscillator(), lg = ctx.createGain();
     lfo.frequency.value = 6; lg.gain.value = f*0.015; lfo.connect(lg); srcs.push(lfo);
@@ -197,7 +199,7 @@ function meow(m, t, len, vol=0.3, slot=-1, at=null){
     filt.connect(g);
   }
   srcs.forEach(s => { s.start(t); s.stop(t+len+0.05); });
-  return track(slot, { stop(at){ g.gain.cancelScheduledValues(at); g.gain.setTargetAtTime(0.0001, at, 0.03); srcs.forEach(s => { try { s.stop(at+0.2); } catch {} }); } });
+  return track(slot, { end: t + len, stop(at, tau = 0.03){ g.gain.cancelScheduledValues(at); g.gain.setTargetAtTime(0.0001, at, tau); srcs.forEach(s => { try { s.stop(at+0.2); } catch {} }); } });
 }
 function applause(){ // clapping from six spots in the crowd, plus a few cats meowing along, so it surrounds you
   const t = ctx.currentTime, loud = 0.35*Math.sqrt(audCount/100);
