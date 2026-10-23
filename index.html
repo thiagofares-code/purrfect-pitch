@@ -28,7 +28,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v30'; // shown on the menu so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v31'; // shown in the credits so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -474,7 +474,7 @@ function makePanel(w, h, px=1024){
   return { mesh, redraw(fn){ const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height); fn(g, c.width, c.height); tex.needsUpdate = true; } };
 }
 const box = (g, x, y, w, h, r, fill) => { g.beginPath(); g.roundRect(x, y, w, h, r); g.fillStyle = fill; g.fill(); };
-const menu = makePanel(1.8, 1.4); menu.mesh.position.set(0, 1.7, -2.4);
+const menu = makePanel(1.8, 1.4); menu.mesh.position.set(0, 2.5, -2.4); menu.mesh.lookAt(0, HEAD_Y, 0); // above the rising highway, facing you
 const MENU_H = 796, CARD_Y = 190, CARD_STEP = 120, CARD_H = 105, NAV_Y = 690, NAV_W = 260; // menu canvas layout, shared with hit-testing
 const hud = makePanel(1.2, 0.3); hud.mesh.position.set(0, 2.4, -3.2); hud.mesh.visible = false;
 const judge = makePanel(1.0, 0.25, 512); judge.mesh.position.set(0, HIT_Y+0.3, HIT_Z-0.9); judge.mesh.material.opacity = 0;
@@ -501,7 +501,7 @@ function drawMenu(){ const v = TIERS[venue], open = unlocked(venue); menu.redraw
   if (venue < TIERS.length-1) { box(g, W-60-NAV_W, NAV_Y, NAV_W, 80, 20, '#5a4a80'); g.fillStyle = '#fff'; g.fillText('Next venue ▶', W-60-NAV_W/2, NAV_Y+52); }
   g.font = 'bold 26px system-ui';
   [['How to play', 80 + NAV_W], ['Credits', W/2 + 8]].forEach(([t, x]) => { box(g, x, NAV_Y, W/2 - 88 - NAV_W, 56, 18, '#3a2f55'); g.fillStyle = '#fff'; g.fillText(t, x + (W/2 - 88 - NAV_W)/2, NAV_Y+38); });
-  g.fillStyle = '#8a7aa0'; g.font = '22px system-ui'; g.fillText(`← → keys · H how to play · C credits · ${BUILD}`, W/2, NAV_Y+82);
+  g.fillStyle = '#8a7aa0'; g.font = '22px system-ui'; g.fillText('← → keys · H how to play · C credits', W/2, NAV_Y+82);
 }); }
 // ---------- tutorial: the first thing a new player sees; replay it from the menu (How to play, or H) ----------
 const TUT_KEY = 'purrfect-pitch-tutorial-v1';
@@ -541,6 +541,7 @@ function showCredits(){ state = 'credits'; menu.mesh.visible = true; menu.redraw
     y += 22;
   }
   g.fillStyle = '#8cff66'; g.font = 'bold 30px system-ui'; g.fillText('Pull the trigger (or press any key) to go back', W/2, MENU_H - 30);
+  g.fillStyle = '#8a7aa0'; g.font = '20px system-ui'; g.textAlign = 'right'; g.fillText(BUILD, W - 30, MENU_H - 30);
 }); }
 function changeVenue(d){ const k = venue + d; if (k < 0 || k >= TIERS.length) return; applyVenue(k); drawMenu(); }
 function pickSong(i){ if (unlocked(venue)) startSong(venue*4 + i); }
@@ -718,7 +719,7 @@ addEventListener('keydown', e => {
   else if (e.code === 'Escape') toMenu();
 });
 addEventListener('keyup', e => { if (e.code in KEYMAP) release(KEYMAP[e.code]); });
-let yaw = 0, pitch = -0.15, drag = null;
+let yaw = 0, pitch = 0.12, drag = null;
 renderer.domElement.addEventListener('pointerdown', e => drag = [e.clientX, e.clientY]);
 addEventListener('pointerup', () => drag = null);
 addEventListener('pointermove', e => { if (!drag) return;
