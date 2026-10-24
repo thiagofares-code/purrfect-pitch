@@ -1,0 +1,240 @@
+[
+ {
+  "id": "song-00",
+  "venue": 0,
+  "title": "Twinkle Twinkle",
+  "composer": "Mozart (variations)",
+  "current": true
+ },
+ {
+  "id": "song-01",
+  "venue": 0,
+  "title": "Brahms' Lullaby",
+  "composer": "Brahms",
+  "current": true
+ },
+ {
+  "id": "song-02",
+  "venue": 0,
+  "title": "Morning Mood",
+  "composer": "Grieg",
+  "current": true
+ },
+ {
+  "id": "song-03",
+  "venue": 0,
+  "title": "Ode to Joy",
+  "composer": "Beethoven",
+  "current": true
+ },
+ {
+  "id": "song-04",
+  "venue": 1,
+  "title": "Minuet in G",
+  "composer": "Petzold (attr. Bach)",
+  "current": true
+ },
+ {
+  "id": "song-05",
+  "venue": 1,
+  "title": "Canon in D",
+  "composer": "Pachelbel",
+  "current": true
+ },
+ {
+  "id": "song-06",
+  "venue": 1,
+  "title": "Swan Lake",
+  "composer": "Tchaikovsky",
+  "current": true
+ },
+ {
+  "id": "song-07",
+  "venue": 1,
+  "title": "Symphony No. 5",
+  "composer": "Beethoven",
+  "current": true
+ },
+ {
+  "id": "song-08",
+  "venue": 2,
+  "title": "Spring",
+  "composer": "Vivaldi",
+  "current": true
+ },
+ {
+  "id": "song-09",
+  "venue": 2,
+  "title": "Habanera",
+  "composer": "Bizet",
+  "current": true
+ },
+ {
+  "id": "song-10",
+  "venue": 2,
+  "title": "La donna \u00c3\u00a8 mobile",
+  "composer": "Verdi",
+  "current": true
+ },
+ {
+  "id": "song-11",
+  "venue": 2,
+  "title": "F\u00c3\u00bcr Elise",
+  "composer": "Beethoven",
+  "current": true
+ },
+ {
+  "id": "song-12",
+  "venue": 3,
+  "title": "Eine kleine Nachtmusik",
+  "composer": "Mozart",
+  "current": true
+ },
+ {
+  "id": "song-13",
+  "venue": 3,
+  "title": "In the Hall of the Mountain King",
+  "composer": "Grieg",
+  "current": true
+ },
+ {
+  "id": "song-14",
+  "venue": 3,
+  "title": "Dance of the Sugar Plum Fairy",
+  "composer": "Tchaikovsky",
+  "current": true
+ },
+ {
+  "id": "song-15",
+  "venue": 3,
+  "title": "Hungarian Dance No. 5",
+  "composer": "Brahms",
+  "current": true
+ },
+ {
+  "id": "song-16",
+  "venue": 4,
+  "title": "Rondo alla Turca",
+  "composer": "Mozart",
+  "current": true
+ },
+ {
+  "id": "song-17",
+  "venue": 4,
+  "title": "William Tell Overture",
+  "composer": "Rossini",
+  "current": true
+ },
+ {
+  "id": "song-18",
+  "venue": 4,
+  "title": "Can-Can",
+  "composer": "Offenbach",
+  "current": true
+ },
+ {
+  "id": "song-19",
+  "venue": 4,
+  "title": "Flight of the Bumblebee",
+  "composer": "Rimsky-Korsakov",
+  "current": true
+ },
+ {
+  "id": "song-20",
+  "venue": 0,
+  "title": "Amazing Grace",
+  "composer": "Traditional hymn",
+  "current": false
+ },
+ {
+  "id": "song-21",
+  "venue": 0,
+  "title": "Fr\u00e8re Jacques",
+  "composer": "Traditional",
+  "current": false
+ },
+ {
+  "id": "song-22",
+  "venue": 0,
+  "title": "Jingle Bells",
+  "composer": "Pierpont, 1857",
+  "current": false
+ },
+ {
+  "id": "song-23",
+  "venue": 0,
+  "title": "Oh! Susanna",
+  "composer": "Foster, 1848",
+  "current": false
+ },
+ {
+  "id": "song-24",
+  "venue": 1,
+  "title": "Greensleeves",
+  "composer": "Traditional English",
+  "current": false
+ },
+ {
+  "id": "song-25",
+  "venue": 1,
+  "title": "When the Saints Go Marching In",
+  "composer": "Traditional spiritual",
+  "current": false
+ },
+ {
+  "id": "song-26",
+  "venue": 1,
+  "title": "Scarborough Fair",
+  "composer": "Traditional English",
+  "current": false
+ },
+ {
+  "id": "song-27",
+  "venue": 1,
+  "title": "Gymnop\u00e9die No. 1",
+  "composer": "Satie",
+  "current": false
+ },
+ {
+  "id": "song-28",
+  "venue": 2,
+  "title": "The Entertainer",
+  "composer": "Scott Joplin, 1902",
+  "current": false
+ },
+ {
+  "id": "song-29",
+  "venue": 2,
+  "title": "Symphony No. 40",
+  "composer": "Mozart",
+  "current": false
+ },
+ {
+  "id": "song-30",
+  "venue": 2,
+  "title": "The Blue Danube",
+  "composer": "Johann Strauss II",
+  "current": false
+ },
+ {
+  "id": "song-31",
+  "venue": 3,
+  "title": "Toreador Song",
+  "composer": "Bizet, Carmen",
+  "current": false
+ },
+ {
+  "id": "song-32",
+  "venue": 3,
+  "title": "Bridal Chorus (\"Here Comes the Bride\")",
+  "composer": "Wagner",
+  "current": false
+ },
+ {
+  "id": "song-33",
+  "venue": 4,
+  "title": "Hallelujah Chorus",
+  "composer": "Handel, Messiah",
+  "current": false
+ }
+]
