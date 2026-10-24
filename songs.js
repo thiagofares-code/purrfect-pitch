@@ -97,10 +97,9 @@ export const SONGS = [
   { title:'Twinkle Twinkle', composer:'Mozart (variations)', bpm:100, bar:4, hat:1, pickup:0, form:'A', parts:{
     A:'C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2 G4 G4 F4 F4 E4 E4 D4:2 G4 G4 F4 F4 E4 E4 D4:2 C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2' },
     chords:{ A:'C:4 F:2 C:2 F:2 C:2 G:2 C:2 C:2 F:2 C:2 G:2 C:2 F:2 C:2 G:2 C:4 F:2 C:2 F:2 C:2 G:2 C:2' } },
-  { title:"Brahms' Lullaby", composer:'Brahms', bpm:84, bar:3, hat:1, pickup:1, form:'AB', parts:{
-    A:'E4:0.5 E4:0.5 G4:2 E4:0.5 E4:0.5 G4:2 E4:0.5 G4:0.5 C5:1 B4:1.5 A4:0.5 A4:1 G4:1 D4:0.5 E4:0.5 F4:1 D4:1 D4:0.5 E4:0.5 F4:2 D4:0.5 F4:0.5 B4:0.5 A4:0.5 G4:1 B4:1 C5:2 C4:0.5 C4:0.5',
-    B:'C5:2 A4:0.5 F4:0.5 G4:2 E4:0.5 C4:0.5 F4:1 G4:1 A4:1 G4:2 C4:0.5 C4:0.5 C5:2 A4:0.5 F4:0.5 G4:2 E4:0.5 C4:0.5 F4:1 E4:1 D4:1 C4:2' },
-    chords:{ A:'N:1 C:3 C:3 F:3 G:3 G7:3 G7:3 G7:3 C:3', B:'F:3 C:3 F:3 C:3 F:3 C:3 G7:3 C:2' } },
+  { title:'Frère Jacques', composer:'Traditional (French)', bpm:110, bar:4, hat:1, pickup:0, form:'A', parts:{
+    A:'C4 D4 E4 C4 C4 D4 E4 C4 E4 F4 G4:2 E4 F4 G4:2 G4:0.5 A4:0.5 G4:0.5 F4:0.5 E4 C4 G4:0.5 A4:0.5 G4:0.5 F4:0.5 E4 C4 C4 G3 C4:2 C4 G3 C4:2' },
+    chords:{ A:'C:24 C:1 G:1 C:2 C:1 G:1 C:2' } },
   { title:'Morning Mood', composer:'Grieg', bpm:84, bar:3, hat:1.5, pickup:0, form:'ABCDEA', parts:{
     A:'B5:0.5 G#5:0.5 F#5:0.5 E5:0.5 F#5:0.5 G#5:0.5 B5:0.5 G#5:0.5 F#5:0.5 E5:0.5 F#5:0.5 G#5:0.5 B5:0.5 G#5:0.5 B5:0.5 C#6:0.5 G#5:0.5 C#6:0.5 B5:0.5 G#5:0.5 F#5:0.5 E5:1.5',
     B:'B4:0.5 G#4:0.5 F#4:0.5 E4:0.5 F#4:0.5 G#4:0.5 B4:0.5 G#4:0.5 F#4:0.5 E4:0.5 F#4:0.5 G#4:0.5 B4:0.5 G#4:0.5 B4:0.5 C#5:0.5 G#4:0.5 C#5:0.5 D#5:0.5 C5:0.5 A#4:0.5 G#4:1.5',

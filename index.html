@@ -24,11 +24,11 @@ Quest: Enter VR · sweep your baton through each circle (up or down) as its note
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor, chordAt, PRACTICE } from './songs.js?v=16';
+import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesFor, difficultyFor, chordAt, PRACTICE } from './songs.js?v=17';
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v32'; // shown in the credits so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v33'; // shown in the credits so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
