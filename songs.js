@@ -120,23 +120,23 @@ export const SONGS = [
     C:'B5 G5:0.5 A5:0.5 B5:0.5 G5:0.5 A5 D5:0.5 E5:0.5 F#5:0.5 D5:0.5 G5 E5:0.5 F#5:0.5 G5:0.5 D5:0.5 C#5 B4:0.5 C#5:0.5 A4 A4:0.5 B4:0.5 C#5:0.5 D5:0.5 E5:0.5 F#5:0.5 G5 F#5 E5 F#5 A4 C#5 D5:3',
     D:'D5 G4:0.5 F#4:0.5 G4 E5 G4:0.5 F#4:0.5 G4 D5 C5 B4 A4:0.5 G4:0.5 F#4:0.5 G4:0.5 A4 D4:0.5 E4:0.5 F#4:0.5 G4:0.5 A4:0.5 B4:0.5 C5 B4 A4 B4:0.5 D5:0.5 G4 F#4 G4:3' },
     chords:{ A:'G:3 G:3 C:3 G:3 C:3 G:3 D:3 D:3', B:'G:3 G:3 C:3 G:3 C:3 G:3 D:3 G:3', C:'G:3 D:3 Em:3 A:3 D:3 G:3 A7:3 D:3', D:'G:3 C:3 G:3 D:3 D:3 Am:3 D:3 G:3' } },
-  { title:'Canon in D', composer:'Pachelbel', bpm:72, bar:4, hat:1, pickup:0, form:'ABCD', parts:{
-    A:'F#5:2 E5:2 D5:2 C#5:2 B4:2 A4:2 B4:2 C#5:2',
-    B:'D5 C#5 B4 A4 G4 F#4 G4 E4 D5 C#5 B4 A4 G4 F#4 G4 A4',
-    C:'D4:0.5 F#4:0.5 A4:0.5 G4:0.5 F#4:0.5 D4:0.5 F#4:0.5 E4:0.5 D4:0.5 B3:0.5 D4:0.5 A4:0.5 G4:0.5 B4:0.5 A4:0.5 G4:0.5 F#4:0.5 D4:0.5 E4:0.5 C#5:0.5 D5:0.5 F#5:0.5 A5:0.5 A4:0.5 B4:0.5 G4:0.5 A4:0.5 F#4:0.5 D4:0.5 D5:0.5 D5:1',
-    D:'F#5 D5:0.5 E5:0.5 F#5 D5:0.5 E5:0.5 F#5:0.5 A4:0.5 B4:0.5 C#5:0.5 D5:0.5 E5:0.5 F#5:0.5 G5:0.5 F#5 D5:0.5 E5:0.5 F#5 C#5:0.5 D5:0.5 E5:0.5 A4:0.5 B4:0.5 C#5:0.5 D5:0.5 E5:0.5 F#5:0.5 G5:0.5' },
-    chords:{ A:'D:2 A:2 Bm:2 F#m:2 G:2 D:2 G:2 A:2', B:'D:2 A:2 Bm:2 F#m:2 G:2 D:2 G:2 A:2', C:'D:2 A:2 Bm:2 F#m:2 G:2 D:2 G:2 A:2', D:'D:2 A:2 Bm:2 F#m:2 G:2 D:2 G:2 A:2' } },
+  { title:'Greensleeves', composer:'Traditional (English)', bpm:120, bar:3, hat:1, pickup:1, form:'AB', parts:{ // A minor; A = verse, B = refrain
+    A:'A4 C5:2 D5 E5:1.5 F5:0.5 E5 D5:2 B4 G4:1.5 A4:0.5 B4 C5:2 A4 A4:1.5 G#4:0.5 A4 B4:2 G#4 E4:2 A4 ' +
+      'C5:2 D5 E5:1.5 F5:0.5 E5 D5:2 B4 G4:1.5 A4:0.5 B4 C5:1.5 B4:0.5 A4 G#4:1.5 F#4:0.5 G#4 A4:3',
+    B:'G5:3 G5:1.5 F#5:0.5 E5 D5:2 B4 G4:1.5 A4:0.5 B4 C5:2 A4 A4:1.5 G#4:0.5 A4 B4:2 G#4 E4:3 ' +
+      'G5:3 G5:1.5 F#5:0.5 E5 D5:2 B4 G4:1.5 A4:0.5 B4 C5:1.5 B4:0.5 A4 G#4:1.5 F#4:0.5 G#4 A4:3 A4:2' },
+    chords:{ A:'N:1 Am:3 C:3 G:3 Em:3 Am:3 E:3 E:3 E:3 Am:3 C:3 G:3 Em:3 Am:3 E:3 Am:3',
+             B:'C:3 C:3 G:3 Em:3 Am:3 E:3 E:3 E:3 C:3 C:3 G:3 Em:3 Am:3 E:3 Am:3 Am:2' } },
   { title:'Swan Lake', composer:'Tchaikovsky', bpm:84, bar:4, hat:1, pickup:0, form:'ABCAB', parts:{
     A: SWAN1 + 'B4:2.5 E5:0.5 D5:0.5 C#5:0.5',
     B: SWAN1 + 'B4:3 B4:1',
     C:'C#5 D5 E5 F#5:0.5 G5:0.5 A5:1.5 G5:0.5 F#5 G5:0.5 A5:0.5 B5:1.5 A5:0.5 G5 A5:0.5 B5:0.5 C#6:1.5 B5:0.5 F#5:0.5 D5:0.5 C#5:0.5 B4:0.5 ' +
       'C#5 D5 E5 F#5:0.5 G5:0.5 A5:1.5 G5:0.5 F#5 G5:0.5 A5:0.5 B5:1.5 A5:0.5 G5 A5:0.5 B5:0.5 C6:1.5 G5:0.5 E5 G5:0.5 C6:0.5 C#6:1.5 G#5:0.5 C#6:1.5 F#5:0.5' },
     chords:{ A:'Bm:4 Bm:4 Bm:2 G:2 Bm:2 F#:2', B:'Bm:4 Bm:4 Bm:2 G:2 Bm:4', C:'A:4 D:4 G:4 F#:4 A:4 D:4 G:4 C:4 C#:2 F#:2' } },
-  { title:'Symphony No. 5', composer:'Beethoven', bpm:180, bar:4, hat:2, pickup:0, form:'ABABC', parts:{ // units: eighths
-    A:'R G4 G4 G4 D#4:4 R F4 F4 F4 D4:8',
-    B:'R G4 G4 G4 D#4 G#4 G#4 G#4 G4 D#5 D#5 D#5 C5:4 R G4 G4 G4 D4 G#4 G#4 G#4 G4 F5 F5 F5 D5:4',
-    C:'C5:2 R:2 C5:2 R:2 C5:4 R:4' },
-    chords:{ A:'Cm:4 Cm:4 G7:4 G7:8', B:'Cm:4 G#:4 Cm:4 Cm:4 G7:4 Fm:4 G7:4 G7:4', C:'C:16' } },
+  { title:'Scarborough Fair', composer:'Traditional (English)', bpm:108, bar:3, hat:1, pickup:0, form:'A', parts:{ // D Dorian waltz
+    A:'D4:2 D4 A4:2 A4 E4:1.5 F4:0.5 E4 D4:3 R:2 A4 C5:2 D5 C5:2 A4 B4 G4 A4 A4:3 ' +
+      'R:2 D5 D5:2 D5 C5:2 A4 A4 G4 F4 E4 C4:2 D4:2 A4 G4:2 F4 E4 D4 C4 D4:3' },
+    chords:{ A:'Dm:3 Dm:3 C:3 Dm:3 Dm:3 F:3 Am:3 G:3 Dm:3 Dm:3 Dm:3 Am:3 F:3 C:3 Dm:3 G7:3 C:3 Dm:3' } },
   // ---- 3 · The Jazz Club ----
   { title:'Spring', composer:'Vivaldi', bpm:100, bar:4, hat:1, pickup:0, form:'AAB', parts:{
     A: SPRING,
