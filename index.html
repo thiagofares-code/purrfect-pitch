@@ -28,7 +28,7 @@ import { SONGS, TIERS, STARS_TO_UNLOCK, parseSong, timeAt, beatAt, spbAt, lanesF
 import { buildVenues } from './venues.js?v=12';
 import { makePaw } from './paw.js?v=12';
 import { makeBand } from './band.js?v=13';
-const BUILD = 'v31'; // shown in the credits so you can tell a reload picked up the latest version; bump with songs.js?v=
+const BUILD = 'v32'; // shown in the credits so you can tell a reload picked up the latest version; bump with songs.js?v=
 const hz = m => 440 * 2 ** ((m-69)/12);
 
 // ---------- career progress (best stars/score per song, kept in this browser) ----------
@@ -60,13 +60,14 @@ function initAudio(){
   ctx = new AudioContext({ latencyHint: 0.05 }); // 50 ms buffers: no crackle on the Quest, still quick enough for cues; songNow() subtracts it
   master = ctx.createGain(); master.gain.value = 0.6;
   master.connect(ctx.createDynamicsCompressor()).connect(ctx.destination);
-  // voices: a touch of top end plus a short stage reverb so the choir sounds live
+  // voices: top end softened (no harsh edge or hiss) and a stage reverb, so the choir blends with the band
   voiceBus = ctx.createGain(); voiceBus.gain.value = 1.2;
-  const shelf = ctx.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = 2500; shelf.gain.value = 1; // +1 dB only: warmer, rounder meows (Bongo Cat-like; +6 sounded thin)
+  const shelf = ctx.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = 3500; shelf.gain.value = -4;
+  const soft = ctx.createBiquadFilter(); soft.type = 'lowpass'; soft.frequency.value = 6500; soft.Q.value = 0.5;
   const verb = ctx.createConvolver(), wet = ctx.createGain(), ir = ctx.createBuffer(2, ctx.sampleRate*1.6, ctx.sampleRate);
   for (let ch=0; ch<2; ch++){ const d = ir.getChannelData(ch); for (let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * (1 - i/d.length)**3; }
-  verb.buffer = ir; wet.gain.value = 0.25;
-  voiceBus.connect(shelf).connect(master); shelf.connect(verb).connect(wet).connect(master);
+  verb.buffer = ir; wet.gain.value = 0.35;
+  voiceBus.connect(shelf).connect(soft).connect(master); soft.connect(verb).connect(wet).connect(master);
   noise = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
   const d = noise.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
   backing = makeBand(ctx, master, noise, (x, y, z) => panner(new THREE.Vector3(x, y, z))); // each instrument plays from its spot on stage
@@ -99,16 +100,24 @@ function boom(at){ // firework: a low thump and a crackle, from where it burst
 // the choir: five cats, one per lane slot, each pre-tuned onto every note in its range (tools/tune.py:
 // Praat PSOLA, all within 8 cents of the note). A note plays from its lane's own cat when that cat covers
 // it, otherwise from the nearest cat that does. The synth is the fallback while samples load.
-// the choir's voice: one clean, untouched meow (Pixabay, dragon-studio kitten), played faster or slower per note like a
-// sampler, so it sings cute instead of re-synthesised and robotic (picked by ear on the meow-style test, B1)
-const VOICE_DEFS = [{ name:'meow', file:'sounds/meow.mp3', natural:75.26 }, { name:'high', file:'sounds/meow-high.mp3', natural:78.5 }]; // high: freesound kitty, for the top notes
+// the choir's voices, picked by ear on audition.html: real meows (Pixabay) autotuned onto every note they sing (Praat PSOLA,
+// keeping 1.2 semitones of the cat's own curve; all within 9 cents). '<voice>_<midi>' is the whole meow, '_s' the same squeezed to 0.3 s
+const VOICE_DEFS = [
+  { name:'tabby',  natural:72.0, lo:62, hi:81 }, // cats 1 and 2
+  { name:'kitten', natural:81.1, lo:70, hi:88 }, // cat 3, the balcony soloist
+  { name:'kitty',  natural:82.5, lo:72, hi:91 }, // cats 4 and 5
+];
+const SLOT_VOICE = [0, 0, 1, 2, 2]; // choir slot (lane colour) -> voice
+const SHORT_NOTE = 0.45; // seconds: notes this short sing the quick '_s' meow
 const SAMPLES = {}; // name -> { key, midi, offset, dur, buf, loop }
 const catPanners = [], voices = []; // per choir cat: its fixed 3D position, and the note it is singing
 const catPanner = (slot, at) => catPanners[slot] ||= (p => (p.connect(voiceBus), p))(panner(at, 2, true));
 const track = (slot, v) => (slot >= 0 && (voices[slot] = v), v);
 function loadVoices(){
-  for (const v of VOICE_DEFS) fetch(v.file).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => {
-    const s = { key: v.name, midi: v.natural, offset: 0, dur: buf.duration }; s.loop = makeLoop(s, buf); s.buf = buf; SAMPLES[v.name] = s; }).catch(() => {});
+  for (const v of VOICE_DEFS) for (let m = v.lo; m <= v.hi; m++) for (const sfx of ['', '_s']) {
+    const key = `${v.name}_${m}`;
+    fetch(`sounds/tuned/${key}${sfx}.mp3`).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => {
+      const s = { key, midi: m, offset: 0, dur: buf.duration }; if (!sfx) s.loop = makeLoop(s, buf); s.buf = buf; SAMPLES[key + sfx] = s; }).catch(() => {}); }
 }
 // sustain loop for held notes: a whole number of pitch cycles from the middle of the vowel, with its end
 // trimmed to match its start and crossfaded into the samples just before it, so repeating it has no seam
@@ -122,8 +131,11 @@ function makeLoop(v, buf){
   for (let j=0;j<C;j++){ const w = j/C; o[L-C+j] = d[at+L-C+j]*(1-w) + d[at-C+j]*w; }
   return out;
 }
-// the loaded meow naturally closest to the note, so it is pitched as little as possible (a sampler's multi-sampling)
-const pickVoice = m => Object.values(SAMPLES).reduce((a, s) => !a || Math.abs(m - s.midi) < Math.abs(m - a.midi) ? s : a, null);
+// this cat's voice at the note (clamped into its range, then shifted the last bit); crowd meows (slot -1) use the first voice
+function pickVoice(m, slot = -1){
+  const v = VOICE_DEFS[SLOT_VOICE[slot] ?? 0], n = Math.min(v.hi, Math.max(v.lo, Math.round(m)));
+  return SAMPLES[`${v.name}_${n}`] || Object.values(SAMPLES).find(s => s.loop) || null;
+}
 // octave that keeps a melody closest to the cats' natural range (synth uses it too, so both sound alike)
 function bestShift(notes){
   const roots = VOICE_DEFS.map(v => v.natural), cost = k => notes.reduce((s, n) => s + Math.min(...roots.map(r => Math.abs(n.midi + k - r))), 0);
@@ -132,15 +144,15 @@ function bestShift(notes){
 // slot = which choir cat sings (its sound comes from that cat); at = any other spot (e.g. a cat in the crowd)
 function meow(m, t, len, vol=0.3, slot=-1, at=null){
   const f = hz(m), g = ctx.createGain(), srcs = [], v = pickVoice(m, slot);
-  // a note shorter than the meow sings the whole meow and lets it ring (the next note glides in), so it's sung, not beeped
-  const mew = v && len <= v.dur * hz(v.midi) / f + 0.05 ? v : null;
+  // a quick note sings the whole quick meow, a longer one the whole meow (held notes loop its vowel); each lets it ring
+  const mew = v && (len <= SHORT_NOTE && SAMPLES[v.key + '_s'] || (len <= v.dur * hz(v.midi) / f + 0.05 ? v : null));
   if (mew) len = Math.max(len, mew.buf.duration * hz(v.midi) / f);
   const tail = mew ? 0.04 : Math.min(0.35, len*0.45); // soft release
   // legato: if this cat is still singing (or just stopped), it glides into the new note: no fresh "m", the old one crossfades out
   const prev = slot >= 0 ? voices[slot] : null, legato = !!prev && prev.end > t - 0.08, skip = legato ? 0.04 : 0;
-  g.gain.setValueAtTime(legato ? vol*0.5 : 0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+(legato ? 0.04 : v ? 0.01 : 0.03)); g.gain.setValueAtTime(vol, t+len-tail); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
+  g.gain.setValueAtTime(legato ? vol*0.5 : 0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+(legato ? 0.06 : v ? 0.025 : 0.03)); g.gain.setValueAtTime(vol, t+len-tail); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
   const from = slot >= 0 ? allBand[slot].getWorldPosition(new THREE.Vector3()).setY(allBand[slot].position.y + 1) : at;
-  if (slot >= 0) { prev?.stop(t, legato ? 0.05 : 0.03); g.connect(catPanner(slot, from)); } else if (from) g.connect(panner(from)).connect(voiceBus); else g.connect(voiceBus);
+  if (slot >= 0) { prev?.stop(t, legato ? 0.08 : 0.03); g.connect(catPanner(slot, from)); } else if (from) g.connect(panner(from)).connect(voiceBus); else g.connect(voiceBus);
   if (v){
     const rate = f / hz(v.midi), boost = ctx.createGain(); boost.gain.value = 2.5; boost.connect(g);
     const srcs = [];
